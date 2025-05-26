@@ -213,9 +213,17 @@ if (isset($_POST['delete_event'])) {
                 <p>Manage and track all your events</p>
             </div>
             <div>
-                <a href="create_event.php" class="create-event-btn">+ Create New Event</a>
-                <a href="ai_chat.php" class="create-event-btn" style="margin-left: 10px; background: linear-gradient(135deg, #fd79a8 0%, #fdcb6e 100%);">🤖 AI Assistant</a>
-            </div>
+    <a href="create_event.php" class="create-event-btn">+ Create New Event</a>
+    <a href="ai_chat.php" class="create-event-btn" style="margin-left: 10px; background: linear-gradient(135deg, #fd79a8 0%, #fdcb6e 100%);">AI Assistant</a>
+</div>
+<div class="event-meta">
+    <span><i class="fas fa-calendar-alt"></i> <?php echo date('M j, Y', strtotime($event_item['event_date'])); ?></span>
+    <span><i class="fas fa-users"></i> <?php echo $event_item['guest_count'] ?: 'TBD'; ?> guests</span>
+    <span><i class="fas fa-dollar-sign"></i> $<?php echo number_format($event_item['budget'] ?: 0); ?></span>
+    <span class="status-badge status-<?php echo strtolower($event_item['status'] ?: 'planning'); ?>">
+        <?php echo $event_item['status'] ?: 'Planning'; ?>
+    </span>
+</div>
         </div>
         
         <?php if (isset($success_message)): ?>
