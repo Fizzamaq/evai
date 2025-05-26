@@ -17,12 +17,12 @@ $profile = $user->getProfile($_SESSION['user_id']);
     <div class="profile-section">
         <div class="profile-pic">
             <?php if (!empty($profile['profile_image'])): ?>
-                <img src="../assets/uploads/users/<?= htmlspecialchars($profile['profile_image']) ?>" alt="Profile Picture">
-            <?php else: ?>
-                <div class="initials">
-                    <?= substr($profile['first_name'], 0, 1) . substr($profile['last_name'], 0, 1) ?>
-                </div>
-            <?php endif; ?>
+        <img src="<?= ASSETS_PATH ?>uploads/users/<?= htmlspecialchars($profile['profile_image']) ?>" alt="Profile Picture">
+    <?php else: ?>
+        <div class="initials" style="background-image: url('<?= ASSETS_PATH ?>images/default-avatar.jpg'); background-size: cover; background-position: center;">
+            <?= substr($profile['first_name'], 0, 1) . substr($profile['last_name'], 0, 1) ?>
+        </div>
+    <?php endif; ?>
         </div>
         
         <div class="profile-info">
