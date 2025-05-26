@@ -148,3 +148,19 @@ $notifications = $notification->getUserNotifications($_SESSION['user_id']);
                         <div class="notification-message">${notification.message}</div>
                         <div class="notification-time">
                             ${new Date().toLocaleString()} • <span class="math-inline">\{notification\.type\}
+                        </div>
+                    </div>
+<div class="notification-actions">
+<a href="?mark_read={notification.id}" class="mark-read-btn">Mark Read</a>
+<a href="?delete=${notification.id}" class="delete-btn">Delete</a>
+</div>
+`;
+container.insertBefore(newNotification, container.firstChild);
+}
+};
+*/
+// If WebSocket is not implemented, you might consider polling for new notifications
+// periodically, similar to the chat.php example, but with appropriate rate limits.
+</script>
+</body>
+</html>
