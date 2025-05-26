@@ -1,34 +1,50 @@
+// In dashboard.php, before loading dashboard.js, define JS variables:
+// <script>
+//     const currentUserId = <?php echo json_encode($_SESSION['user_id'] ?? null); ?>;
+//     const currentUserType = <?php echo json_encode($user['user_type_id'] ?? null); ?>;
+// </script>
+// Then in dashboard.js, use currentUserId and currentUserType
 document.addEventListener('DOMContentLoaded', function() {
-    // Load dynamic content based on user type
-    const userId = <?php echo $_SESSION['user_id']; ?>;
-    const userType = <?php echo $user['user_type_id']; ?>;
-    
-    if (userType === 1) {
+    // Assume currentUserId and currentUserType are defined globally in the PHP page
+    // Example: const currentUserId = typeof currentUserId !== 'undefined' ? currentUserId : null;
+    //          const currentUserType = typeof currentUserType !== 'undefined' ? currentUserType : null;
+    // Or ensure they are always present from the PHP output.
+
+    if (currentUserType === 1) {
         // Load customer data
-        loadUpcomingEvents(userId);
-    } else {
+        loadUpcomingEvents(currentUserId);
+    } else if (currentUserType === 2) { // Assuming 2 is vendor type
         // Load vendor data
-        loadVendorMetrics(userId);
-        loadRecentMessages(userId);
+        loadVendorMetrics(currentUserId);
+        // loadRecentMessages(userId); // This function is not defined in the provided JS
     }
+    // For other user types or unauthenticated, no dynamic data loading here
 });
 
 function loadUpcomingEvents(userId) {
+    if (!userId) return;
     fetch(`/api/events/upcoming?user_id=${userId}`)
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(events => {
             const container = document.getElementById('upcoming-events');
-            
+            if (!container) return;
+
             if (events.length === 0) {
                 container.innerHTML = '<p>No upcoming events found.</p>';
                 return;
             }
-            
+
             let html = '<ul class="event-list">';
             events.forEach(event => {
                 html += `
                     <li>
-                        <h3>${event.title}</h3>
+                        <h3><span class="math-inline">\{event\.title\}</h3\>
+                        
                         <p>${formatDate(event.event_date)} at ${event.venue_name || 'Location TBD'}</p>
                         <a href="/event.php?id=${event.id}">View Details</a>
                     </li>
