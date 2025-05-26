@@ -118,4 +118,11 @@ class CalendarManager {
 
         return $tokenArray; // Return the current (or freshly set) full token array
     }
+
+    // Method to check if a user has a token (useful for UI)
+    public function hasToken($userId) {
+        $stmt = $this->pdo->prepare("SELECT 1 FROM user_calendar_tokens WHERE user_id = ?");
+        $stmt->execute([$userId]);
+        return (bool)$stmt->fetchColumn();
+    }
 }
