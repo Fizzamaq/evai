@@ -53,27 +53,39 @@ function loadUpcomingEvents(userId) {
             html += '</ul>';
             
             container.innerHTML = html;
-        })
-        .catch(error => {
-            console.error('Error loading events:', error);
-            document.getElementById('upcoming-events').innerHTML = 
-                '<p class="error">Could not load events. Please try again later.</p>';
-        });
-}
+            })
+            .catch(error => {
+                console.error('Error loading events:', error);
+                const container = document.getElementById('upcoming-events');
+                if (container) {
+                    container.innerHTML = '<p class="error">Could not load events. Please try again later.</p>';
+                }
+            });
+    }
 
-function loadVendorMetrics(vendorId) {
-    fetch(`/api/vendors/metrics?id=${vendorId}`)
-        .then(response => response.json())
-        .then(data => {
-            document.getElementById('upcoming-bookings').textContent = data.upcoming_bookings;
-            document.getElementById('total-earnings').textContent = `$${data.total_earnings}`;
-        })
-        .catch(error => {
-            console.error('Error loading vendor metrics:', error);
-        });
-}
+    function loadVendorMetrics(vendorId) {
+        if (!vendorId) return;
+        fetch(`/api/vendors/metrics?id=${vendorId}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Ensure elements exist before trying to update them
+                const upcomingBookingsEl = document.getElementById('upcoming-bookings');
+                if (upcomingBookingsEl) upcomingBookingsEl.textContent = data.upcoming_bookings;
+                const totalEarningsEl = document.getElementById('total-earnings');
+                if (totalEarningsEl) totalEarningsEl.textContent = `$${data.total_earnings}`;
+            })
+            .catch(error => {
+                console.error('Error loading vendor metrics:', error);
+                // Optionally display an error message on the dashboard
+            });
+    }
 
-function formatDate(dateString) {
-    const options = { year: 'numeric', month: 'long', day: 'numeric' };
-    return new Date(dateString).toLocaleDateString(undefined, options);
-}
+    function formatDate(dateString) {
+        const options = { year: 'numeric', month: 'long', day: 'numeric' };
+        return new Date(dateString).toLocaleDateString(undefined, options);
+    }
