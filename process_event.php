@@ -76,11 +76,10 @@ $event_data = [
 
 // Handle services (convert array to JSON)
 $services = [];
-if (!empty($_POST['services']) && is_array($_POST['services'])) {
+if (isset($_POST['services']) && is_array($_POST['services'])) { // Check if set and is array
     $services = $_POST['services'];
 }
 $event_data['services_needed'] = json_encode($services);
-
 try {
     // Create the event
     $event_id = $event->createEvent($event_data);
