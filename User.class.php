@@ -97,4 +97,83 @@ class User {
             throw new Exception("Profile update failed: " . $e->getMessage());
         }
     }
+        // Missing method: getUserById
+    public function getUserById($userId) {
+        $stmt = $this->pdo->prepare("SELECT u.*, up.* FROM users u LEFT JOIN user_profiles up ON u.id = up.user_id WHERE u.id = ?");
+        $stmt->execute([$userId]);
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+
+    // Missing method: initiatePasswordReset
+    public function initiatePasswordReset($email) {
+        try {
+            $stmt = $this->pdo->prepare("SELECT id FROM users WHERE email = ? AND is_active = 1");
+            $stmt->execute([$email]);
+            $user = $stmt->fetch();
+
+            if ($user) {
+                $token = bin2hex(random_bytes(32));
+                $expires = date('Y-m-d H:i:s', strtotime('+1 hour')); // Token expires in 1 hour
+                $stmt = $this->pdo->prepare("INSERT INTO password_resets (user_id, token, expires_at) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE token = VALUES(token), expires_at = VALUES(expires_at)");
+                $stmt->execute([$user['id'], $token, $expires]);
+
+                // In a real application, you'd send an email here
+                error_log("Password reset link for $email: " . BASE_URL . "reset_password.php?token=$token");
+                return true;
+            }
+            return false;
+        } catch (PDOException $e) {
+            error_log("Initiate password reset error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    // Missing method: validateResetToken
+    public function validateResetToken($token) {
+        $stmt = $this->pdo->prepare("SELECT user_id FROM password_resets WHERE token = ? AND expires_at > NOW()");
+        $stmt->execute([$token]);
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+
+    // Missing method: resetPassword
+    public function resetPassword($token, $newPassword) {
+        try {
+            $this->pdo->beginTransaction();
+            $tokenData = $this->validateResetToken($token);
+
+            if (!$tokenData) {
+                throw new Exception("Invalid or expired token.");
+            }
+
+            $hashedPassword = password_hash($newPassword, PASSWORD_DEFAULT);
+            $stmt = $this->pdo->prepare("UPDATE users SET password_hash = ? WHERE id = ?");
+            $stmt->execute([$hashedPassword, $tokenData['user_id']]);
+
+            // Invalidate the token
+            $stmt = $this->pdo->prepare("DELETE FROM password_resets WHERE token = ?");
+            $stmt->execute([$token]);
+
+            $this->pdo->commit();
+            return true;
+        } catch (Exception $e) {
+            $this->pdo->rollBack();
+            error_log("Reset password error: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    // Missing method: isAdmin (referenced in settings.php)
+    public function isAdmin($userId) {
+        $stmt = $this->pdo->prepare("SELECT user_type_id FROM users WHERE id = ?");
+        $stmt->execute([$userId]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result && $result['user_type_id'] == 3; // Assuming 3 is admin type
+    }
+
+    // Missing method: updateProfileImage (referenced in process_profile.php)
+    public function updateProfileImage($userId, $filename) {
+        $stmt = $this->pdo->prepare("UPDATE user_profiles SET profile_image = ? WHERE user_id = ?");
+        return $stmt->execute([$filename, $userId]);
+    }
+}
 }
