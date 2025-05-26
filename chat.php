@@ -7,7 +7,7 @@ require_once '../classes/Chat.class.php';
 require_once '../classes/Event.class.php';
 
 if (!isset($_SESSION['user_id'])) {
-    header('Location: login.php');
+    header('Location: ' . BASE_URL . 'public/login.php');
     exit();
 }
 
@@ -38,13 +38,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_message'])) {
 
         if ($conversation_id) {
             $chat->sendMessage($conversation_id, $_SESSION['user_id'], $message);
-            // Redirect to prevent form re-submission on refresh
-            header("Location: chat.php?conversation_id=" . urlencode($conversation_id));
+            // For AJAX-based message sending, avoid full page redirect.
+            // If it's a non-AJAX POST, redirect to prevent form re-submission on refresh
+            // header("Location: " . BASE_URL . "public/chat.php?conversation_id=" . urlencode($conversation_id));
+            // exit();
+            // For AJAX:
+            header('Content-Type: application/json');
+            echo json_encode(['success' => true, 'message' => 'Message sent.']);
             exit();
         } else {
             error_log("Failed to send message: No conversation ID or invalid parameters for starting new conversation.");
-            // Set an error message in session or variable to display to user
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'error' => 'Failed to start/send message to conversation.']);
+            exit();
         }
+    } else {
+         header('Content-Type: application/json');
+         echo json_encode(['success' => false, 'error' => 'Message cannot be empty.']);
+         exit();
     }
 }
 
@@ -59,31 +70,36 @@ if ($conversation_id) {
 
     // Get conversation details
     try {
+        // Updated joins to correctly fetch profile_image from user_profiles table
         $stmt = $pdo->prepare("
-            SELECT cc.*,
+            SELECT cc.*, 
                    e.title as event_title,
-                   CASE
-                     WHEN cc.user_id = ? THEN vp.business_name
+                   CASE 
+                     WHEN cc.user_id = :current_user_id THEN vp.business_name
                      ELSE CONCAT(u.first_name, ' ', u.last_name)
                    END as other_party_name,
-                   CASE
-                     WHEN cc.user_id = ? THEN u2.profile_image
-                     ELSE u.profile_image
+                   CASE 
+                     WHEN cc.user_id = :current_user_id THEN up_vendor.profile_image
+                     ELSE up_user.profile_image
                    END as other_party_image
             FROM chat_conversations cc
             JOIN events e ON cc.event_id = e.id
-            LEFT JOIN vendor_profiles vp ON cc.vendor_id = vp.user_id
             LEFT JOIN users u ON cc.vendor_id = u.id
+            LEFT JOIN user_profiles up_vendor ON u.id = up_vendor.user_id -- Join for vendor's profile image
             LEFT JOIN users u2 ON cc.user_id = u2.id
-            WHERE cc.id = ?
+            LEFT JOIN user_profiles up_user ON u2.id = up_user.user_id -- Join for user's profile image
+            WHERE cc.id = :conversation_id
         ");
-        $stmt->execute([$_SESSION['user_id'], $_SESSION['user_id'], $conversation_id]);
+        $stmt->execute([
+            ':current_user_id' => $_SESSION['user_id'], 
+            ':conversation_id' => $conversation_id
+        ]);
         $current_conversation = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if ($current_conversation) {
             $other_party = [
-                'id' => ($current_conversation['user_id'] == $_SESSION['user_id'])
-                    ? $current_conversation['vendor_id']
+                'id' => ($current_conversation['user_id'] == $_SESSION['user_id']) 
+                    ? $current_conversation['vendor_id'] 
                     : $current_conversation['user_id'],
                 'name' => $current_conversation['other_party_name'],
                 'image' => $current_conversation['other_party_image']
@@ -111,6 +127,7 @@ $unread_count = $chat->getUnreadCount($_SESSION['user_id']);
     <link rel="stylesheet" href="../assets/css/style.css">
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <style>
+        /* ... (existing chat.php inline styles) ... */
         .chat-container {
             max-width: 1200px;
             margin: 0 auto;
@@ -347,9 +364,9 @@ $unread_count = $chat->getUnreadCount($_SESSION['user_id']);
                     <div class="no-conversation">No conversations yet</div>
                 <?php else: ?>
                     <?php foreach ($conversations as $conv): ?>
-                        <div class="conversation-item <?php echo ($conv['id'] == $conversation_id) ? 'active' : ''; ?>"
-                             onclick="window.location.href='chat.php?conversation_id=<?php echo $conv['id']; ?>'">
-                            <div class="conversation-avatar" style="background-image: url('<?php echo htmlspecialchars($conv['other_party_image'] ? '../assets/uploads/users/' . $conv['other_party_image'] : '../assets/images/default-avatar.jpg'); ?>')"></div>
+                        <div class="conversation-item <?php echo ($conv['id'] == $conversation_id) ? 'active' : ''; ?>" 
+                             onclick="window.location.href='<?= BASE_URL ?>public/chat.php?conversation_id=<?php echo $conv['id']; ?>'">
+                            <div class="conversation-avatar" style="background-image: url('<?php echo htmlspecialchars($conv['other_party_image'] ? BASE_URL . 'assets/uploads/users/' . $conv['other_party_image'] : BASE_URL . 'assets/images/default-avatar.jpg'); ?>')"></div>
                             <div class="conversation-details">
                                 <div class="conversation-title">
                                     <span><?php echo htmlspecialchars($conv['other_party_name']); ?></span>
@@ -373,7 +390,7 @@ $unread_count = $chat->getUnreadCount($_SESSION['user_id']);
         <div class="chat-area">
             <?php if ($current_conversation): ?>
                 <div class="chat-header">
-                    <div class="chat-header-avatar" style="background-image: url('<?php echo htmlspecialchars($other_party['image'] ? '../assets/uploads/users/' . $other_party['image'] : '../assets/images/default-avatar.jpg'); ?>')"></div>
+                    <div class="chat-header-avatar" style="background-image: url('<?php echo htmlspecialchars($other_party['image'] ? BASE_URL . 'assets/uploads/users/' . $other_party['image'] : BASE_URL . 'assets/images/default-avatar.jpg'); ?>')"></div>
                     <div class="chat-header-info">
                         <div class="chat-header-title"><?php echo htmlspecialchars($other_party['name']); ?></div>
                         <div class="chat-header-subtitle"><?php echo htmlspecialchars($current_conversation['event_title']); ?></div>
@@ -391,10 +408,10 @@ $unread_count = $chat->getUnreadCount($_SESSION['user_id']);
                 </div>
                 <div class="chat-input">
                     <form class="message-form" method="POST">
-                        <textarea
-                            class="message-input"
-                            name="message"
-                            placeholder="Type your message..."
+                        <textarea 
+                            class="message-input" 
+                            name="message" 
+                            placeholder="Type your message..." 
                             id="message-input"
                             required
                         ></textarea>
@@ -431,15 +448,15 @@ $unread_count = $chat->getUnreadCount($_SESSION['user_id']);
             const message = messageInput.value.trim();
 
             if (message) {
-                fetch('chat.php?<?php echo $_SERVER['QUERY_STRING']; ?>', {
+                fetch('<?= BASE_URL ?>public/chat.php?<?php echo $_SERVER['QUERY_STRING']; ?>', { // Use BASE_URL
                     method: 'POST',
                     body: new URLSearchParams(new FormData(form)),
                     headers: {
                         'Content-Type': 'application/x-www-form-urlencoded'
                     }
-                }).then(response => {
-                    // Instead of redirecting on success, dynamically add the message
-                    if (response.ok) {
+                }).then(response => response.json()) // Expect JSON response
+                .then(data => {
+                    if (data.success) {
                         messageInput.value = '';
                         const messagesContainer = document.getElementById('messages-container');
                         if (messagesContainer) {
@@ -453,8 +470,8 @@ $unread_count = $chat->getUnreadCount($_SESSION['user_id']);
                             scrollToBottom();
                         }
                     } else {
-                        alert('Failed to send message.');
-                        console.error('Message send failed with status:', response.status);
+                        alert('Failed to send message: ' + (data.error || 'Unknown error.'));
+                        console.error('Message send failed:', data.error);
                     }
                 }).catch(error => {
                     console.error('Error sending message:', error);
@@ -466,7 +483,7 @@ $unread_count = $chat->getUnreadCount($_SESSION['user_id']);
         // Poll for new messages every 5 seconds (consider WebSockets for real-time)
         setInterval(() => {
             if (<?php echo $conversation_id ? 'true' : 'false'; ?>) {
-                fetch(`chat.php?conversation_id=<?php echo $conversation_id; ?>&ajax=1`)
+                fetch(`<?= BASE_URL ?>public/chat.php?conversation_id=<?php echo $conversation_id; ?>&ajax=1`) // Use BASE_URL
                     .then(response => response.text())
                     .then(html => {
                         const parser = new DOMParser();
@@ -489,7 +506,7 @@ $unread_count = $chat->getUnreadCount($_SESSION['user_id']);
                         }
                     }).catch(error => console.error('Error polling for messages:', error));
             }
-        }, 5000); // Poll every 5 seconds
+        }, 5000);
 
         // Initial scroll to bottom
         scrollToBottom();
