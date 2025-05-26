@@ -3,7 +3,7 @@
 session_start();
 require_once '../includes/config.php';
 require_once '../classes/PaymentProcessor.class.php';
-require_once '../classes/Booking.class.php'; // Include Booking class
+require_once '../classes/Booking.class.php';
 
 $processor = new PaymentProcessor($pdo); // Pass PDO
 $bookingSystem = new Booking($pdo); // Pass PDO
@@ -15,20 +15,23 @@ try {
     if (!$booking) {
         throw new Exception("Booking not found.");
     }
-    if ($booking['user_id'] != $_SESSION['user_id']) { // Basic security check
-         throw new Exception("Access denied to this booking.");
+    // Validate that the user owns this booking or has permission
+    if ($booking['user_id'] != $_SESSION['user_id']) {
+         throw new Exception("Access denied to process payment for this booking.");
     }
 
     // Create payment intent
+    // The amount should come from the booking details, not directly from POST if possible
     $paymentIntent = $processor->createPaymentIntent(
-        $booking['final_amount'],
-        ['booking_id' => $bookingId, 'user_id' => $_SESSION['user_id']] // Pass user_id to metadata
+        $booking['final_amount'], // Use amount from booking
+        ['booking_id' => $bookingId, 'user_id' => $_SESSION['user_id']]
     );
 
     if ($paymentIntent) {
         echo json_encode([
             'clientSecret' => $paymentIntent->client_secret,
-            'booking' => $booking
+            'booking_id' => $booking['id'], // Return booking ID for client-side confirmation
+            'final_amount' => $booking['final_amount']
         ]);
     } else {
         throw new Exception("Failed to create payment intent.");
