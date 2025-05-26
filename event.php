@@ -1,5 +1,6 @@
 <?php
 require_once '../includes/config.php';
+require_once '../classes/Event.class.php'; // Include Event class
 include 'header.php';
 
 if (!isset($_SESSION['user_id']) || !isset($_GET['id'])) {
@@ -10,15 +11,13 @@ if (!isset($_SESSION['user_id']) || !isset($_GET['id'])) {
 $eventId = (int)$_GET['id'];
 $userId = $_SESSION['user_id'];
 
-$event = new Event($pdo);
-$eventDetails = $event->getEvents($userId, null, $eventId);
+$event = new Event($pdo); // Pass PDO
+$eventDetails = $event->getEventById($eventId, $userId); // Use getEventById
 
 if (empty($eventDetails)) {
     header("Location: events.php");
     exit();
 }
-
-$eventDetails = $eventDetails[0];
 ?>
 <div class="event-details-container">
     <h1><?= htmlspecialchars($eventDetails['title']) ?></h1>
