@@ -1,53 +1,91 @@
-<div class="calendar-sync-container">
-    <h2>Calendar Integration</h2>
-    <?php
-    // These variables would typically be set by a PHP controller that handles Google Calendar logic
-    $hasToken = false; // Placeholder: Replace with actual logic to check if user has a token
-    $calendarAuthUrl = '#'; // Placeholder: Replace with actual Google Auth URL
+<?php
+session_start();
+require_once __DIR__ . '/../includes/config.php';
+require_once __DIR__ . '/../classes/CalendarManager.class.php';
+include 'header.php'; // Assuming header includes common setup
 
-    // Example of how these might be set if this were part of a larger system:
-    // require_once '../classes/CalendarManager.class.php';
-    // $calendarManager = new CalendarManager($pdo);
-    // $hasToken = $calendarManager->hasToken($_SESSION['user_id']); // Assuming a hasToken method
-    // $calendarAuthUrl = $calendarManager->getAuthUrl();
-    ?>
+// Ensure user is logged in
+if (!isset($_SESSION['user_id'])) {
+    header('Location: ' . BASE_URL . 'public/login.php');
+    exit();
+}
+
+$calendarManager = new CalendarManager($pdo);
+$hasToken = $calendarManager->hasToken($_SESSION['user_id']); // Check if user has a token
+$calendarAuthUrl = $calendarManager->getAuthUrl(); // Get the Google Auth URL
+
+// Handle OAuth2 callback for Google Calendar
+if (isset($_GET['code']) && isset($_GET['scope']) && str_contains($_GET['scope'], 'calendar')) {
+    if ($calendarManager->handleCallback($_GET['code'])) {
+        $_SESSION['success_message'] = "Google Calendar connected successfully!";
+    } else {
+        $_SESSION['error_message'] = "Failed to connect Google Calendar. Please try again.";
+    }
+    // Redirect to clean URL to prevent re-processing callback code
+    header('Location: ' . BASE_URL . 'public/calendar_sync.php');
+    exit();
+}
+?>
+
+<div class="calendar-sync-container">
+    <h1>Calendar Integration</h1>
+
+    <?php if (isset($_SESSION['success_message'])): ?>
+        <div class="alert alert-success"><?= htmlspecialchars($_SESSION['success_message']); unset($_SESSION['success_message']); ?></div>
+    <?php endif; ?>
+    <?php if (isset($_SESSION['error_message'])): ?>
+        <div class="alert alert-error"><?= htmlspecialchars($_SESSION['error_message']); unset($_SESSION['error_message']); ?></div>
+    <?php endif; ?>
+
     <?php if ($hasToken): ?>
         <div class="sync-status connected">
             ✅ Connected to Google Calendar
             <button id="disconnect-calendar" class="btn btn-danger">Disconnect</button>
         </div>
-        <div id="calendar-events"></div>
+        <div id="calendar-events" style="margin-top: 20px;">
+            <p>Loading upcoming events...</p>
+        </div>
     <?php else: ?>
-        <a href="<?= htmlspecialchars($calendarAuthUrl) ?>" class="google-connect-btn">
-            <img src="<?= ASSETS_PATH ?>images/google-icon.png" alt="Google"> Connect Google Calendar
+        <a href="<?= htmlspecialchars($calendarAuthUrl) ?>" class="google-connect-btn btn btn-primary">
+            <img src="<?= ASSETS_PATH ?>images/google-icon.png" alt="Google" style="height: 20px; vertical-align: middle; margin-right: 10px;">
+            Connect Google Calendar
         </a>
+        <p style="margin-top: 15px; color: #636e72;">
+            Connect your Google Calendar to sync your event bookings and manage your availability.
+        </p>
     <?php endif; ?>
 </div>
 
+<?php include 'footer.php'; ?>
+
 <script>
 document.getElementById('disconnect-calendar')?.addEventListener('click', async () => {
-    // Check if disconnect-calendar button exists before adding listener
-    try {
-        const response = await fetch('/api/calendar/disconnect', { method: 'POST' }); // Use POST for state-changing actions
-        if (response.ok) {
-            location.reload();
-        } else {
-            alert('Failed to disconnect calendar. Please try again.');
+    if (confirm('Are you sure you want to disconnect Google Calendar?')) {
+        try {
+            // This would be an AJAX call to a new endpoint to clear the token from DB
+            const response = await fetch('<?= BASE_URL ?>api/calendar/disconnect.php', { method: 'POST' }); // Use POST for state-changing actions
+            const data = await response.json();
+            if (response.ok && data.success) {
+                alert('Google Calendar disconnected.');
+                location.reload();
+            } else {
+                alert('Failed to disconnect calendar: ' + (data.error || 'Unknown error.'));
+            }
+        } catch (error) {
+            console.error('Error disconnecting calendar:', error);
+            alert('An error occurred while disconnecting the calendar.');
         }
-    } catch (error) {
-        console.error('Error disconnecting calendar:', error);
-        alert('An error occurred while disconnecting the calendar.');
     }
 });
 
 // Load calendar events
-// window.googleCalendarEnabled is not defined, assuming it's related to $hasToken
-if (<?= $hasToken ? 'true' : 'false' ?>) { // Check hasToken directly
+if (<?= $hasToken ? 'true' : 'false' ?>) {
     loadCalendarEvents();
 
     async function loadCalendarEvents() {
         try {
-            const response = await fetch('/api/calendar/events');
+            // This would be an AJAX call to a new endpoint to fetch events from Google Calendar
+            const response = await fetch('<?= BASE_URL ?>api/calendar/events.php');
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
@@ -66,7 +104,7 @@ if (<?= $hasToken ? 'true' : 'false' ?>) { // Check hasToken directly
             console.error('Error loading calendar events:', error);
             const calendarEventsDiv = document.getElementById('calendar-events');
             if (calendarEventsDiv) {
-                calendarEventsDiv.innerHTML = '<p class="error-message">Failed to load calendar events. Please try again later.</p>';
+                calendarEventsDiv.innerHTML = '<p class="error-message">Failed to load calendar events. Please ensure permissions are granted.</p>';
             }
         }
     }
