@@ -1,8 +1,8 @@
 <?php
 session_start();
 require_once '../includes/config.php';
-require_once '../classes/Booking.class.php'; // Include Booking class
-require_once '../classes/Review.class.php';   // Include Review class
+require_once '../classes/Booking.class.php';
+require_once '../classes/Review.class.php';
 
 $booking = new Booking($pdo); // Pass PDO
 $review = new Review($pdo);   // Pass PDO
@@ -19,8 +19,8 @@ if ($booking_id) {
 }
 
 // Verify valid booking for review
-if (!$booking_details || $booking_details['status'] !== 'completed') {
-    $_SESSION['error'] = "Invalid booking or booking not completed yet for review.";
+if (!$booking_details || $booking_details['status'] !== 'completed' || ($booking_details['is_reviewed'] ?? false)) {
+    $_SESSION['error'] = "Invalid booking, booking not completed, or already reviewed.";
     header('Location: ' . BASE_URL . 'public/dashboard.php');
     exit();
 }
@@ -38,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $review_data = [
         'booking_id' => $booking_id,
         'reviewer_id' => $_SESSION['user_id'],
-        'reviewed_id' => $booking_details['vendor_id'],
+        'reviewed_id' => $booking_details['vendor_id'], // Reviewed is the vendor's user ID
         'rating' => (int)$_POST['rating'],
         'review_title' => trim($_POST['title']),
         'review_content' => trim($_POST['content']),
