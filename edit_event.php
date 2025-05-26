@@ -1,5 +1,6 @@
 <?php
 require_once '../includes/config.php';
+require_once '../classes/Event.class.php'; // Include Event class
 include 'header.php';
 
 if (!isset($_SESSION['user_id']) || !isset($_GET['id'])) {
@@ -10,20 +11,19 @@ if (!isset($_SESSION['user_id']) || !isset($_GET['id'])) {
 $eventId = (int)$_GET['id'];
 $userId = $_SESSION['user_id'];
 
-$event = new Event($pdo);
-$eventDetails = $event->getEvents($userId, null, $eventId);
+$event = new Event($pdo); // Pass PDO to constructor
+$eventDetails = $event->getEventById($eventId, $userId); // Use getEventById with user_id
 
 if (empty($eventDetails)) {
+    $_SESSION['event_error'] = "Event not found or you don't have permission to edit it.";
     header("Location: events.php");
     exit();
 }
 
-$eventDetails = $eventDetails[0];
-$eventTypes = $pdo->query("SELECT * FROM event_types")->fetchAll();
-$eventServices = $pdo->prepare("SELECT service_id FROM event_service_requirements WHERE event_id = ?");
-$eventServices->execute([$eventId]);
-$selectedServices = $eventServices->fetchAll(PDO::FETCH_COLUMN);
-$allServices = $pdo->query("SELECT * FROM vendor_services")->fetchAll();
+$eventTypes = dbFetchAll("SELECT * FROM event_types"); // Use dbFetchAll
+$eventServices = dbFetchAll("SELECT service_id FROM event_service_requirements WHERE event_id = ?", [$eventId]);
+$selectedServices = array_column($eventServices, 'service_id');
+$allServices = dbFetchAll("SELECT * FROM vendor_services"); // Use dbFetchAll
 
 $error = $_SESSION['event_error'] ?? null;
 unset($_SESSION['event_error']);
