@@ -33,7 +33,7 @@ try {
                     $redirect_url = BASE_URL . 'public/dashboard.php';
                     break;
                 case 2: // Vendor
-                    $redirect_url = BASE_URL . 'vendor/dashboard.php'; // Assuming you'll rename the current dashboard.php
+                    $redirect_url = BASE_URL . 'public/vendor_dashboard.php'; // Assuming you'll rename the current dashboard.php
                     break;
                 case 3: // Admin
                     $redirect_url = BASE_URL . 'admin/dashboard.php';
