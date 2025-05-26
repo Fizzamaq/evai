@@ -1,24 +1,25 @@
 <?php
-session_start();
-require_once '../../includes/config.php';
-require_once '../../classes/User.class.php';
-require_once '../../classes/SystemSettings.class.php';
+require_once __DIR__ . '/../includes/config.php';
+require_once __DIR__ . '/../classes/User.class.php'; // Required for isAdmin check
+require_once __DIR__ . '/../classes/SystemSettings.class.php'; // Required for SystemSettings class
 
-$user = new User();
-$settings = new SystemSettings();
+$user = new User($pdo); // Pass PDO
+$settings = new SystemSettings($pdo); // Pass PDO
 
-if (!$user->isAdmin($_SESSION['user_id'])) {
-    header('Location: /login.php');
+if (!$user->isAdmin($_SESSION['user_id'] ?? null)) { // Check if user is admin
+    header('Location: ' . BASE_URL . 'public/login.php');
     exit();
 }
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     foreach ($_POST['settings'] as $key => $value) {
-        $settings->updateSetting($key, $value);
+        // Sanitize and validate input before updating settings
+        $sanitizedValue = htmlspecialchars($value); // Basic sanitization
+        $settings->updateSetting($key, $sanitizedValue);
     }
     $_SESSION['success'] = "Settings updated successfully!";
-    header('Location: settings.php');
+    header('Location: ' . BASE_URL . 'admin/settings.php');
     exit();
 }
 
@@ -66,6 +67,15 @@ $system_settings = $settings->getAllSettings();
             border: 2px solid #e1e5e9;
             border-radius: 6px;
         }
+
+        .alert {
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
     </style>
 </head>
 <body>
@@ -74,6 +84,10 @@ $system_settings = $settings->getAllSettings();
     <div class="settings-container">
         <h1>System Settings</h1>
         
+        <?php if (isset($_SESSION['success'])): ?>
+            <div class="alert"><?= htmlspecialchars($_SESSION['success']); unset($_SESSION['success']); ?></div>
+        <?php endif; ?>
+
         <form method="POST">
             <?php foreach ($system_settings as $setting): ?>
                 <div class="setting-item">
@@ -82,16 +96,16 @@ $system_settings = $settings->getAllSettings();
                     
                     <?php if ($setting['data_type'] === 'boolean'): ?>
                         <label>
-                            <input type="checkbox" name="settings[<?php echo $setting['setting_key']); ?>]" 
+                            <input type="checkbox" name="settings[<?php echo htmlspecialchars($setting['setting_key']); ?>]" 
                                 value="1" <?php echo $setting['setting_value'] ? 'checked' : ''; ?>>
                             Enable
                         </label>
                     <?php elseif ($setting['data_type'] === 'json'): ?>
-                        <textarea class="setting-input" name="settings[<?php echo $setting['setting_key']); ?>]" 
+                        <textarea class="setting-input" name="settings[<?php echo htmlspecialchars($setting['setting_key']); ?>]" 
                             rows="4"><?php echo htmlspecialchars($setting['setting_value']); ?></textarea>
                     <?php else: ?>
                         <input type="text" class="setting-input" 
-                            name="settings[<?php echo $setting['setting_key']); ?>]" 
+                            name="settings[<?php echo htmlspecialchars($setting['setting_key']); ?>]" 
                             value="<?php echo htmlspecialchars($setting['setting_value']); ?>">
                     <?php endif; ?>
                 </div>
