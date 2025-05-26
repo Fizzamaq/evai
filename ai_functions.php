@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/config.php'; // Ensure config is loaded for $pdo
 
 class AI_Assistant {
     private $apiKey;
@@ -24,7 +24,7 @@ class AI_Assistant {
                     'role' => 'system',
                     'content' => 'You are an event planning assistant. Help users create event details based on their description. ' .
                                 'Respond with JSON format containing: event_title, event_type, description, event_date (YYYY-MM-DD), ' .
-                                'budget_range (min and max), required_services (array of service names with priorities), ' .
+                                'budget_range (min and max), required_services (array of service names with priorities and optional budget allocation), ' .
                                 'and reasoning (brief explanation of choices).'
                 ],
                 [
@@ -60,8 +60,15 @@ class AI_Assistant {
             if (isset($data['error'])) {
                 throw new Exception('OpenAI API error: ' . $data['error']['message']);
             }
+            if (!isset($data['choices'][0]['message']['content'])) {
+                throw new Exception('OpenAI API response missing content.');
+            }
+
 
             $content = json_decode($data['choices'][0]['message']['content'], true);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                throw new Exception('Failed to decode AI response JSON: ' . json_last_error_msg());
+            }
             return $this->formatEventData($content);
 
         } catch (Exception $e) {
@@ -94,9 +101,11 @@ class AI_Assistant {
         ];
 
         foreach ($aiData['required_services'] ?? [] as $service) {
-            if (isset($serviceMap[$service['name']])) {
+            // Normalize service name before lookup if needed (e.g., lowercase, remove spaces)
+            $normalizedServiceName = strtolower(str_replace(' ', '_', $service['name']));
+            if (isset($serviceMap[$normalizedServiceName])) { // Check against normalized name
                 $formatted['services'][] = [
-                    'service_id' => $serviceMap[$service['name']],
+                    'service_id' => $serviceMap[$normalizedServiceName],
                     'priority' => $service['priority'] ?? 'medium',
                     'budget' => $service['budget_allocation'] ?? null
                 ];
@@ -124,20 +133,20 @@ class AI_Assistant {
 
             $placeholders = implode(',', array_fill(0, count($serviceIds), '?'));
             
-            $query = "SELECT v.*, 
+            $query = "SELECT vp.*, 
                      COUNT(vso.service_id) AS matched_services,
                      AVG(vso.price_range_min) AS avg_min_price,
                      AVG(vso.price_range_max) AS avg_max_price,
                      ST_X(business_location) AS business_lng,
                      ST_Y(business_location) AS business_lat,
                      (SELECT COUNT(*) FROM vendor_availability 
-                      WHERE vendor_id = v.id 
+                      WHERE vendor_id = vp.id 
                       AND date = ? 
                       AND status = 'available') AS availability_score
-                     FROM vendor_profiles v
-                     JOIN vendor_service_offerings vso ON v.id = vso.vendor_id
+                     FROM vendor_profiles vp
+                     JOIN vendor_service_offerings vso ON vp.id = vso.vendor_id
                      WHERE vso.service_id IN ($placeholders)
-                     GROUP BY v.id
+                     GROUP BY vp.id
                      ORDER BY matched_services DESC, 
                               availability_score DESC,
                               (avg_min_price + avg_max_price) / 2 ASC
@@ -160,7 +169,7 @@ class AI_Assistant {
     private function calculateVendorScore($vendor, $event) {
         $scores = [
             'location' => $this->calculateLocationScore($vendor, $event),
-            'availability' => $vendor['availability_score'] * 0.3,
+            'availability' => ($vendor['availability_score'] ?? 0) * 0.3, // Handle null availability_score
             'price' => $this->calculatePriceScore($vendor, $event),
             'reviews' => ($vendor['rating'] ?? 0) * 0.2
         ];
@@ -169,7 +178,7 @@ class AI_Assistant {
     }
 
     private function calculateLocationScore($vendor, $event) {
-        if (!isset($vendor['business_lat']) || !isset($event['lat'])) {
+        if (!isset($vendor['business_lat']) || !isset($event['lat']) || !isset($vendor['business_lng']) || !isset($event['lng'])) {
             return 0.5; // Default score if location data missing
         }
         
@@ -178,15 +187,15 @@ class AI_Assistant {
             $event['lat'], $event['lng']
         );
         
-        return ($vendor['service_radius'] >= $distance) ? 1 : 0;
+        return (($vendor['service_radius'] ?? 0) >= $distance) ? 1 : 0; // Handle null service_radius
     }
 
     private function calculatePriceScore($vendor, $event) {
-        $avgPrice = ($vendor['avg_min_price'] + $vendor['avg_max_price']) / 2;
-        $eventBudget = ($event['budget_min'] + $event['budget_max']) / 2;
+        $avgPrice = (($vendor['avg_min_price'] ?? 0) + ($vendor['avg_max_price'] ?? 0)) / 2;
+        $eventBudget = (($event['budget_min'] ?? 0) + ($event['budget_max'] ?? 0)) / 2;
         
-        if ($avgPrice <= $event['budget_min']) return 1;
-        if ($avgPrice <= $event['budget_max']) return 0.8;
+        if ($avgPrice <= ($event['budget_min'] ?? 0)) return 1;
+        if ($avgPrice <= ($event['budget_max'] ?? 0)) return 0.8;
         return 0.2;
     }
 
@@ -202,6 +211,7 @@ class AI_Assistant {
         return $earthRadius * $c;
     }
 
+    // Helper methods for database interaction
     private function dbFetch($query, $params = []) {
         $stmt = $this->pdo->prepare($query);
         $stmt->execute($params);
