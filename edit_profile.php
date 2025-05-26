@@ -1,5 +1,6 @@
 <?php
 require_once '../includes/config.php';
+require_once '../classes/User.class.php'; // Include User class
 include 'header.php';
 
 if (!isset($_SESSION['user_id'])) {
@@ -7,9 +8,8 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-require_once '../classes/User.class.php';
-$user = new User($pdo);
-$profile = $user->getProfile($_SESSION['user_id']);
+$user = new User($pdo); // Pass PDO
+$profile = $user->getProfile($_SESSION['user_id']); // getProfile is correct
 
 $error = $_SESSION['profile_error'] ?? null;
 $success = $_SESSION['profile_success'] ?? null;
