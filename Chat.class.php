@@ -3,9 +3,10 @@
 class Chat {
     private $conn;
 
-    public function __construct($pdo) { // Changed to accept PDO
+    public function __construct($pdo) { // Pass PDO to constructor
         $this->conn = $pdo;
     }
+
     // Start a new conversation
     public function startConversation($event_id, $user_id, $vendor_id) {
         try {
@@ -13,18 +14,27 @@ class Chat {
             $stmt = $this->conn->prepare("SELECT id FROM chat_conversations 
                 WHERE event_id = ? AND user_id = ? AND vendor_id = ?");
             $stmt->execute([$event_id, $user_id, $vendor_id]);
-            
+
             if ($stmt->rowCount() > 0) {
                 return $stmt->fetch(PDO::FETCH_ASSOC)['id'];
             }
-            
+
             // Create new conversation
             $stmt = $this->conn->prepare("INSERT INTO chat_conversations 
                 (event_id, user_id, vendor_id) 
                 VALUES (?, ?, ?)");
             $stmt->execute([$event_id, $user_id, $vendor_id]);
-            
-            return $this->conn->lastInsertId();
+
+            $conversation_id = $this->conn->lastInsertId();
+
+            // Update booking with chat_conversation_id (if a booking exists for this event/user/vendor)
+            // This logic might need to be refined based on when a chat starts relative to a booking.
+            // Assuming you'd link an existing booking or create one later.
+            $updateBookingStmt = $this->conn->prepare("UPDATE bookings SET chat_conversation_id = ? WHERE event_id = ? AND user_id = ? AND vendor_id = ?");
+            $updateBookingStmt->execute([$conversation_id, $event_id, $user_id, $vendor_id]);
+
+            return $conversation_id;
+
         } catch (PDOException $e) {
             error_log("Start conversation error: " . $e->getMessage());
             return false;
@@ -37,7 +47,7 @@ class Chat {
             $stmt = $this->conn->prepare("INSERT INTO chat_messages 
                 (conversation_id, sender_id, message_type, message_content, attachment_url) 
                 VALUES (?, ?, ?, ?, ?)");
-            
+
             $stmt->execute([
                 $conversation_id,
                 $sender_id,
@@ -45,10 +55,10 @@ class Chat {
                 $message,
                 $attachment
             ]);
-            
+
             // Update conversation last message time
             $this->updateConversationTime($conversation_id);
-            
+
             return $this->conn->lastInsertId();
         } catch (PDOException $e) {
             error_log("Send message error: " . $e->getMessage());
@@ -95,8 +105,8 @@ class Chat {
                          ELSE CONCAT(u.first_name, ' ', u.last_name)
                        END as other_party_name,
                        CASE 
-                         WHEN cc.user_id = ? THEN u2.profile_image
-                         ELSE u.profile_image
+                         WHEN cc.user_id = ? THEN up_vendor.profile_image -- profile_image from vendor user_profile
+                         ELSE up_user.profile_image -- profile_image from user's user_profile
                        END as other_party_image,
                        cm.message_content as last_message,
                        cm.created_at as last_message_time,
@@ -104,12 +114,15 @@ class Chat {
                         WHERE conversation_id = cc.id AND sender_id != ? AND is_read = FALSE) as unread_count
                 FROM chat_conversations cc
                 JOIN events e ON cc.event_id = e.id
-                LEFT JOIN vendor_profiles vp ON cc.vendor_id = vp.user_id
-                LEFT JOIN users u ON cc.vendor_id = u.id
-                LEFT JOIN users u2 ON cc.user_id = u2.id
-                LEFT JOIN chat_messages cm ON cc.id = cm.conversation_id
+                LEFT JOIN users u ON cc.vendor_id = u.id -- Join to get vendor's user data
+                LEFT JOIN user_profiles up_vendor ON u.id = up_vendor.user_id -- Join to get vendor's profile image
+                LEFT JOIN users u2 ON cc.user_id = u2.id -- Join to get user's user data
+                LEFT JOIN user_profiles up_user ON u2.id = up_user.user_id -- Join to get user's profile image
+                LEFT JOIN chat_messages cm ON cc.id = cm.conversation_id AND cm.id = (
+                    SELECT MAX(id) FROM chat_messages WHERE conversation_id = cc.id
+                ) -- Get only the very last message for preview
                 WHERE (cc.user_id = ? OR cc.vendor_id = ?)
-                GROUP BY cc.id
+                GROUP BY cc.id -- Group by conversation to avoid duplicate rows for last message
                 ORDER BY cc.last_message_at DESC
                 LIMIT ?
             ");
@@ -154,4 +167,3 @@ class Chat {
         }
     }
 }
-?>
