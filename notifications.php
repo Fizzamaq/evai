@@ -4,22 +4,26 @@ require_once '../includes/config.php';
 require_once '../classes/User.class.php';
 require_once '../classes/Notification.class.php';
 
-$user = new User();
-$notification = new Notification();
+$user = new User($pdo); // Pass PDO
+$notification = new Notification($pdo); // Pass PDO
 
 if (!isset($_SESSION['user_id'])) {
-    header('Location: login.php');
+    header('Location: ' . BASE_URL . 'public/login.php');
     exit();
 }
 
 // Mark notification as read
 if (isset($_GET['mark_read'])) {
     $notification->markAsRead($_GET['mark_read'], $_SESSION['user_id']);
+    header('Location: ' . BASE_URL . 'public/notifications.php'); // Redirect to clean URL
+    exit();
 }
 
 // Delete notification
 if (isset($_GET['delete'])) {
     $notification->deleteNotification($_GET['delete'], $_SESSION['user_id']);
+    header('Location: ' . BASE_URL . 'public/notifications.php'); // Redirect to clean URL
+    exit();
 }
 
 // Get all user notifications
@@ -39,7 +43,7 @@ $notifications = $notification->getUserNotifications($_SESSION['user_id']);
             margin: 0 auto;
             padding: 20px;
         }
-        
+
         .notification-card {
             background: white;
             border-radius: 12px;
@@ -51,40 +55,42 @@ $notifications = $notification->getUserNotifications($_SESSION['user_id']);
             align-items: center;
             transition: all 0.2s;
         }
-        
+
         .notification-card.unread {
             background: #f8f9fa;
             border-left: 4px solid #667eea;
         }
-        
+
         .notification-content {
             flex: 1;
             margin-right: 20px;
         }
-        
+
         .notification-time {
             color: #636e72;
             font-size: 0.9em;
         }
-        
+
         .notification-actions {
             display: flex;
             gap: 10px;
         }
-        
+
         .mark-read-btn, .delete-btn {
             padding: 8px 12px;
             border-radius: 6px;
             cursor: pointer;
             transition: all 0.2s;
+            text-decoration: none; /* Ensure buttons look like buttons, not links */
+            display: inline-block; /* Ensure they respect padding */
         }
-        
+
         .mark-read-btn {
             background: #e1e5e9;
             border: none;
             color: #2d3436;
         }
-        
+
         .delete-btn {
             background: #ffeef0;
             border: none;
@@ -94,10 +100,10 @@ $notifications = $notification->getUserNotifications($_SESSION['user_id']);
 </head>
 <body>
     <?php include 'header.php'; ?>
-    
+
     <div class="notifications-container">
         <h1>Notifications</h1>
-        
+
         <?php if (empty($notifications)): ?>
             <div class="empty-state">No notifications found</div>
         <?php else: ?>
@@ -116,7 +122,7 @@ $notifications = $notification->getUserNotifications($_SESSION['user_id']);
                         <?php if (!$note['is_read']): ?>
                             <a href="?mark_read=<?php echo $note['id']; ?>" class="mark-read-btn">Mark Read</a>
                         <?php endif; ?>
-                        <a href="?delete=<?php echo $note['id']; ?>" class="delete-btn">Delete</a>
+                        <a href="?delete=<?php echo $note['id']; ?>" class="delete-btn" onclick="return confirm('Are you sure you want to delete this notification?');">Delete</a>
                     </div>
                 </div>
             <?php endforeach; ?>
@@ -125,11 +131,14 @@ $notifications = $notification->getUserNotifications($_SESSION['user_id']);
 
     <script>
         // Real-time notifications with WebSocket
+        // Note: This WebSocket connection setup requires a separate WebSocket server.
+        // It's commented out as it needs a backend WebSocket implementation.
+        /*
         const ws = new WebSocket('wss://<?php echo $_SERVER['HTTP_HOST'] ?>/notifications/ws');
-        
+
         ws.onmessage = function(event) {
             const notification = JSON.parse(event.data);
-            if (notification.user_id === <?php echo $_SESSION['user_id']; ?>) {
+            if (notification.user_id === <?php echo json_encode($_SESSION['user_id'] ?? null); ?>) {
                 // Add new notification to top
                 const container = document.querySelector('.notifications-container');
                 const newNotification = document.createElement('div');
@@ -138,17 +147,4 @@ $notifications = $notification->getUserNotifications($_SESSION['user_id']);
                     <div class="notification-content">
                         <div class="notification-message">${notification.message}</div>
                         <div class="notification-time">
-                            ${new Date().toLocaleString()} • ${notification.type}
-                        </div>
-                    </div>
-                    <div class="notification-actions">
-                        <a href="?mark_read=${notification.id}" class="mark-read-btn">Mark Read</a>
-                        <a href="?delete=${notification.id}" class="delete-btn">Delete</a>
-                    </div>
-                `;
-                container.insertBefore(newNotification, container.firstChild);
-            }
-        };
-    </script>
-</body>
-</html>
+                            ${new Date().toLocaleString()} • <span class="math-inline">\{notification\.type\}
