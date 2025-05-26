@@ -2,13 +2,17 @@
 session_start();
 require_once '../../includes/config.php';
 require_once '../../classes/Vendor.class.php';
+require_once '../../classes/User.class.php'; // Include User class
 
-$vendor = new Vendor();
-$user = new User();
+$vendor = new Vendor($pdo); // Pass PDO
+$user = new User($pdo); // Pass PDO
 
-// Verify vendor access
-$vendor_data = $vendor->getVendorByUserId($_SESSION['user_id']);
+// Verify vendor access (this also sets $_SESSION['vendor_id'])
+$vendor->verifyVendorAccess();
+
+$vendor_data = $vendor->getVendorByUserId($_SESSION['user_id']); // Re-fetch to ensure all data is current
 if (!$vendor_data) {
+    // This case should ideally be caught by verifyVendorAccess, but as a fallback:
     header('Location: /login.php');
     exit();
 }
@@ -17,7 +21,7 @@ if (!$vendor_data) {
 $stats = [
     'total_bookings' => $vendor->getBookingCount($vendor_data['id']),
     'upcoming_events' => $vendor->getUpcomingEvents($vendor_data['id']),
-    'average_rating' => $vendor_data['rating'],
+    'average_rating' => $vendor_data['rating'] ?? 0, // Handle null rating
     'response_rate' => $vendor->getResponseRate($vendor_data['id'])
 ];
 ?>
@@ -29,6 +33,7 @@ $stats = [
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vendor Dashboard - EventCraftAI</title>
     <link rel="stylesheet" href="../../assets/css/style.css">
+    <link rel="stylesheet" href="../../assets/css/dashboard.css"> <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js'></script>
     <style>
         .vendor-dashboard {
             max-width: 1200px;
@@ -92,15 +97,15 @@ $stats = [
 </head>
 <body>
     <?php include '../includes/vendor_header.php'; ?>
-    
+
     <div class="vendor-dashboard">
         <div class="vendor-header">
             <h1>Welcome, <?= htmlspecialchars($vendor_data['business_name']) ?></h1>
             <div class="rating">
-                ★ <?= number_format($stats['average_rating'], 1) ?> (<?= $vendor_data['total_reviews'] ?> reviews)
+                ★ <?= number_format($stats['average_rating'], 1) ?> (<?= $vendor_data['total_reviews'] ?? 0 ?> reviews)
             </div>
         </div>
-        
+
         <div class="vendor-stats">
             <div class="stat-card">
                 <div class="metric-value"><?= $stats['total_bookings'] ?></div>
@@ -111,27 +116,32 @@ $stats = [
                 <div class="metric-label">Upcoming Events</div>
             </div>
             <div class="stat-card">
-                <div class="metric-value"><?= ($stats['response_rate'] * 100) ?>%</div>
+                <div class="metric-value"><?= number_format($stats['response_rate'] * 100, 0) ?>%</div>
                 <div class="metric-label">Response Rate</div>
             </div>
         </div>
-        
+
         <div class="dashboard-sections">
             <div class="upcoming-bookings">
                 <h2>Upcoming Bookings</h2>
-                <?php foreach ($vendor->getUpcomingBookings($vendor_data['id']) as $booking): ?>
-                    <div class="booking-item">
-                        <div>
-                            <h3><?= htmlspecialchars($booking['event_title']) ?></h3>
-                            <div class="booking-date">
-                                <?= date('M j, Y', strtotime($booking['service_date'])) ?>
+                <?php $upcomingBookings = $vendor->getUpcomingBookings($vendor_data['id']); ?>
+                <?php if (empty($upcomingBookings)): ?>
+                    <p>No upcoming bookings.</p>
+                <?php else: ?>
+                    <?php foreach ($upcomingBookings as $booking): ?>
+                        <div class="booking-item">
+                            <div>
+                                <h3><?= htmlspecialchars($booking['event_title']) ?></h3>
+                                <div class="booking-date">
+                                    <?= date('M j, Y', strtotime($booking['service_date'])) ?>
+                                </div>
                             </div>
+                            <a href="booking.php?id=<?= $booking['id'] ?>" class="btn">View Details</a>
                         </div>
-                        <a href="booking.php?id=<?= $booking['id'] ?>" class="btn">View Details</a>
-                    </div>
-                <?php endforeach; ?>
+                    <?php endforeach; ?>
+                <?php endif; ?>
             </div>
-            
+
             <div class="calendar-widget">
                 <h2>Availability Calendar</h2>
                 <div id="availability-calendar"></div>
@@ -143,14 +153,31 @@ $stats = [
         // Initialize calendar
         document.addEventListener('DOMContentLoaded', function() {
             const calendarEl = document.getElementById('availability-calendar');
-            const calendar = new FullCalendar.Calendar(calendarEl, {
-                initialView: 'dayGridMonth',
-                events: '/api/vendor/availability?vendor_id=<?= $vendor_data['id'] ?>',
-                eventClick: function(info) {
-                    // Handle date click for availability management
-                }
-            });
-            calendar.render();
+            if (calendarEl) {
+                const calendar = new FullCalendar.Calendar(calendarEl, {
+                    initialView: 'dayGridMonth',
+                    events: '/api/vendor/availability?vendor_id=<?= $vendor_data['id'] ?>', // API endpoint for events
+                    eventContent: function(arg) {
+                        // Customize event display
+                        let statusClass = '';
+                        if (arg.event.extendedProps.status === 'available') {
+                            statusClass = 'fc-event-available';
+                        } else if (arg.event.extendedProps.status === 'booked') {
+                            statusClass = 'fc-event-booked';
+                        } else if (arg.event.extendedProps.status === 'blocked') {
+                            statusClass = 'fc-event-blocked';
+                        }
+                        return { html: `<div class="<span class="math-inline">\{statusClass\}"\></span>{arg.event.title}</div>` };
+                    },
+                    eventClick: function(info) {
+                        // Handle date click for availability management
+                        // Example: alert('Event: ' + info.event.title + ' on ' + info.event.startStr);
+                        // You might want to redirect to a detailed availability management page
+                        // or open a modal here.
+                    }
+                });
+                calendar.render();
+            }
         });
     </script>
 </body>
