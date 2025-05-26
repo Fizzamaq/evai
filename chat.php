@@ -11,9 +11,9 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-$user = new User();
-$chat = new Chat();
-$event = new Event();
+$user = new User($pdo); // Pass PDO
+$chat = new Chat($pdo); // Pass PDO
+$event = new Event($pdo); // Pass PDO
 
 $user_data = $user->getUserById($_SESSION['user_id']);
 $conversation_id = $_GET['conversation_id'] ?? null;
@@ -23,17 +23,27 @@ $vendor_id = $_GET['vendor_id'] ?? null;
 // Handle new message
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_message'])) {
     $message = trim($_POST['message']);
-    
+
+    // Validate CSRF token (if implemented)
+    // if (!verifyCSRFToken($_POST['csrf_token'])) {
+    //     error_log("CSRF token mismatch on chat message send.");
+    //     // Handle error, e.g., redirect or show message
+    // }
+
     if (!empty($message)) {
         // If this is a new conversation (no conversation_id but has event_id and vendor_id)
         if (!$conversation_id && $event_id && $vendor_id) {
             $conversation_id = $chat->startConversation($event_id, $_SESSION['user_id'], $vendor_id);
         }
-        
+
         if ($conversation_id) {
             $chat->sendMessage($conversation_id, $_SESSION['user_id'], $message);
-            header("Location: chat.php?conversation_id=$conversation_id");
+            // Redirect to prevent form re-submission on refresh
+            header("Location: chat.php?conversation_id=" . urlencode($conversation_id));
             exit();
+        } else {
+            error_log("Failed to send message: No conversation ID or invalid parameters for starting new conversation.");
+            // Set an error message in session or variable to display to user
         }
     }
 }
@@ -46,17 +56,17 @@ $other_party = null;
 if ($conversation_id) {
     // Mark messages as read when opening conversation
     $chat->markMessagesAsRead($conversation_id, $_SESSION['user_id']);
-    
+
     // Get conversation details
     try {
-        $stmt = $conn->prepare("
-            SELECT cc.*, 
+        $stmt = $pdo->prepare("
+            SELECT cc.*,
                    e.title as event_title,
-                   CASE 
+                   CASE
                      WHEN cc.user_id = ? THEN vp.business_name
                      ELSE CONCAT(u.first_name, ' ', u.last_name)
                    END as other_party_name,
-                   CASE 
+                   CASE
                      WHEN cc.user_id = ? THEN u2.profile_image
                      ELSE u.profile_image
                    END as other_party_image
@@ -69,16 +79,16 @@ if ($conversation_id) {
         ");
         $stmt->execute([$_SESSION['user_id'], $_SESSION['user_id'], $conversation_id]);
         $current_conversation = $stmt->fetch(PDO::FETCH_ASSOC);
-        
+
         if ($current_conversation) {
             $other_party = [
-                'id' => ($current_conversation['user_id'] == $_SESSION['user_id']) 
-                    ? $current_conversation['vendor_id'] 
+                'id' => ($current_conversation['user_id'] == $_SESSION['user_id'])
+                    ? $current_conversation['vendor_id']
                     : $current_conversation['user_id'],
                 'name' => $current_conversation['other_party_name'],
                 'image' => $current_conversation['other_party_image']
             ];
-            
+
             $messages = $chat->getMessages($conversation_id, 100);
             $messages = array_reverse($messages); // Show oldest first
         }
@@ -110,7 +120,7 @@ $unread_count = $chat->getUnreadCount($_SESSION['user_id']);
             gap: 20px;
             height: calc(100vh - 120px);
         }
-        
+
         .conversations-sidebar {
             background: white;
             border-radius: 12px;
@@ -119,17 +129,17 @@ $unread_count = $chat->getUnreadCount($_SESSION['user_id']);
             display: flex;
             flex-direction: column;
         }
-        
+
         .conversations-header {
             padding: 20px;
             border-bottom: 2px solid #e1e5e9;
         }
-        
+
         .conversations-list {
             flex: 1;
             overflow-y: auto;
         }
-        
+
         .conversation-item {
             padding: 15px 20px;
             border-bottom: 1px solid #e1e5e9;
@@ -139,11 +149,11 @@ $unread_count = $chat->getUnreadCount($_SESSION['user_id']);
             align-items: center;
             gap: 15px;
         }
-        
+
         .conversation-item:hover, .conversation-item.active {
             background-color: #f8f9fa;
         }
-        
+
         .conversation-avatar {
             width: 50px;
             height: 50px;
@@ -153,12 +163,12 @@ $unread_count = $chat->getUnreadCount($_SESSION['user_id']);
             background-color: #e1e5e9;
             flex-shrink: 0;
         }
-        
+
         .conversation-details {
             flex: 1;
             min-width: 0;
         }
-        
+
         .conversation-title {
             font-weight: 600;
             color: #2d3436;
@@ -166,7 +176,7 @@ $unread_count = $chat->getUnreadCount($_SESSION['user_id']);
             display: flex;
             justify-content: space-between;
         }
-        
+
         .conversation-preview {
             color: #636e72;
             font-size: 0.9em;
@@ -174,12 +184,12 @@ $unread_count = $chat->getUnreadCount($_SESSION['user_id']);
             overflow: hidden;
             text-overflow: ellipsis;
         }
-        
+
         .conversation-time {
             font-size: 0.8em;
             color: #b2bec3;
         }
-        
+
         .unread-badge {
             background: #e17055;
             color: white;
@@ -192,7 +202,7 @@ $unread_count = $chat->getUnreadCount($_SESSION['user_id']);
             font-size: 0.7em;
             font-weight: bold;
         }
-        
+
         .chat-area {
             background: white;
             border-radius: 12px;
@@ -200,7 +210,7 @@ $unread_count = $chat->getUnreadCount($_SESSION['user_id']);
             display: flex;
             flex-direction: column;
         }
-        
+
         .chat-header {
             padding: 20px;
             border-bottom: 2px solid #e1e5e9;
@@ -208,7 +218,7 @@ $unread_count = $chat->getUnreadCount($_SESSION['user_id']);
             align-items: center;
             gap: 15px;
         }
-        
+
         .chat-header-avatar {
             width: 60px;
             height: 60px;
@@ -217,15 +227,15 @@ $unread_count = $chat->getUnreadCount($_SESSION['user_id']);
             background-position: center;
             background-color: #e1e5e9;
         }
-        
+
         .chat-header-info {
             flex: 1;
         }
-        
+
         .chat-header-title {
             font-weight: 600;
         }
-                .chat-messages {
+        .chat-messages {
             flex: 1;
             padding: 20px;
             overflow-y: auto;
@@ -233,28 +243,28 @@ $unread_count = $chat->getUnreadCount($_SESSION['user_id']);
             flex-direction: column;
             gap: 15px;
         }
-        
+
         .message {
             max-width: 80%;
             padding: 15px;
             border-radius: 15px;
             position: relative;
         }
-        
+
         .message-outgoing {
             background: #667eea;
             color: white;
             align-self: flex-end;
             border-bottom-right-radius: 5px;
         }
-        
+
         .message-incoming {
             background: #f8f9fa;
             color: #2d3436;
             align-self: flex-start;
             border-bottom-left-radius: 5px;
         }
-        
+
         .message-time {
             font-size: 0.8em;
             color: rgba(255,255,255,0.7);
@@ -262,22 +272,22 @@ $unread_count = $chat->getUnreadCount($_SESSION['user_id']);
             display: block;
             text-align: right;
         }
-        
+
         .message-incoming .message-time {
             color: #636e72;
         }
-        
+
         .chat-input {
             padding: 20px;
             border-top: 2px solid #e1e5e9;
             background: #f8f9fa;
         }
-        
+
         .message-form {
             display: flex;
             gap: 10px;
         }
-        
+
         .message-input {
             flex: 1;
             padding: 12px 20px;
@@ -287,7 +297,7 @@ $unread_count = $chat->getUnreadCount($_SESSION['user_id']);
             resize: none;
             height: 50px;
         }
-        
+
         .send-button {
             background: #667eea;
             color: white;
@@ -301,23 +311,23 @@ $unread_count = $chat->getUnreadCount($_SESSION['user_id']);
             align-items: center;
             justify-content: center;
         }
-        
+
         .send-button:hover {
             background: #764ba2;
         }
-        
+
         .no-conversation {
             text-align: center;
             padding: 40px;
             color: #636e72;
         }
-        
+
         @media (max-width: 768px) {
             .chat-container {
                 grid-template-columns: 1fr;
                 height: auto;
             }
-            
+
             .conversations-sidebar {
                 height: 400px;
             }
@@ -326,7 +336,7 @@ $unread_count = $chat->getUnreadCount($_SESSION['user_id']);
 </head>
 <body>
     <?php include 'header.php'; ?>
-    
+
     <div class="chat-container">
         <div class="conversations-sidebar">
             <div class="conversations-header">
@@ -337,9 +347,9 @@ $unread_count = $chat->getUnreadCount($_SESSION['user_id']);
                     <div class="no-conversation">No conversations yet</div>
                 <?php else: ?>
                     <?php foreach ($conversations as $conv): ?>
-                        <div class="conversation-item <?php echo ($conv['id'] == $conversation_id) ? 'active' : ''; ?>" 
+                        <div class="conversation-item <?php echo ($conv['id'] == $conversation_id) ? 'active' : ''; ?>"
                              onclick="window.location.href='chat.php?conversation_id=<?php echo $conv['id']; ?>'">
-                            <div class="conversation-avatar" style="background-image: url('<?php echo htmlspecialchars($conv['other_party_image'] ?? '../assets/images/default-avatar.jpg'); ?>')"></div>
+                            <div class="conversation-avatar" style="background-image: url('<?php echo htmlspecialchars($conv['other_party_image'] ? '../assets/uploads/users/' . $conv['other_party_image'] : '../assets/images/default-avatar.jpg'); ?>')"></div>
                             <div class="conversation-details">
                                 <div class="conversation-title">
                                     <span><?php echo htmlspecialchars($conv['other_party_name']); ?></span>
@@ -359,11 +369,11 @@ $unread_count = $chat->getUnreadCount($_SESSION['user_id']);
                 <?php endif; ?>
             </div>
         </div>
-        
+
         <div class="chat-area">
             <?php if ($current_conversation): ?>
                 <div class="chat-header">
-                    <div class="chat-header-avatar" style="background-image: url('<?php echo htmlspecialchars($other_party['image'] ?? '../assets/images/default-avatar.jpg'); ?>')"></div>
+                    <div class="chat-header-avatar" style="background-image: url('<?php echo htmlspecialchars($other_party['image'] ? '../assets/uploads/users/' . $other_party['image'] : '../assets/images/default-avatar.jpg'); ?>')"></div>
                     <div class="chat-header-info">
                         <div class="chat-header-title"><?php echo htmlspecialchars($other_party['name']); ?></div>
                         <div class="chat-header-subtitle"><?php echo htmlspecialchars($current_conversation['event_title']); ?></div>
@@ -371,7 +381,7 @@ $unread_count = $chat->getUnreadCount($_SESSION['user_id']);
                 </div>
                 <div class="chat-messages" id="messages-container">
                     <?php foreach ($messages as $message): ?>
-                        <div class="message <?php echo ($message['sender_id'] == $_SESSION['user_id']) ? 'message-outgoing' : 'message-incoming'; ?>">
+                        <div class="message <?php echo ($message['sender_id'] == $_SESSION['user_id']) ? 'message-outgoing' : 'message-incoming'; ?>" data-id="<?= $message['id'] ?>">
                             <div class="message-content"><?php echo htmlspecialchars($message['message_content']); ?></div>
                             <span class="message-time">
                                 <?php echo date('g:i a', strtotime($message['created_at'])); ?>
@@ -381,10 +391,10 @@ $unread_count = $chat->getUnreadCount($_SESSION['user_id']);
                 </div>
                 <div class="chat-input">
                     <form class="message-form" method="POST">
-                        <textarea 
-                            class="message-input" 
-                            name="message" 
-                            placeholder="Type your message..." 
+                        <textarea
+                            class="message-input"
+                            name="message"
+                            placeholder="Type your message..."
                             id="message-input"
                             required
                         ></textarea>
@@ -403,23 +413,23 @@ $unread_count = $chat->getUnreadCount($_SESSION['user_id']);
             <?php endif; ?>
         </div>
     </div>
-    
+
     <?php include 'footer.php'; ?>
-    
+
     <script>
         // Auto-scroll to bottom of messages
         function scrollToBottom() {
             const container = document.getElementById('messages-container');
             if (container) container.scrollTop = container.scrollHeight;
         }
-        
+
         // Send message with AJAX
-        document.querySelector('.message-form').addEventListener('submit', function(e) {
+        document.querySelector('.message-form')?.addEventListener('submit', function(e) {
             e.preventDefault();
             const form = this;
             const messageInput = document.getElementById('message-input');
             const message = messageInput.value.trim();
-            
+
             if (message) {
                 fetch('chat.php?<?php echo $_SERVER['QUERY_STRING']; ?>', {
                     method: 'POST',
@@ -427,26 +437,33 @@ $unread_count = $chat->getUnreadCount($_SESSION['user_id']);
                     headers: {
                         'Content-Type': 'application/x-www-form-urlencoded'
                     }
-                }).then(() => {
-                    messageInput.value = '';
-                    scrollToBottom();
-                    // Add temporary message immediately
-                    const messagesContainer = document.getElementById('messages-container');
-                    if (messagesContainer) {
-                        const tempMsg = document.createElement('div');
-                        tempMsg.className = 'message message-outgoing';
-                        tempMsg.innerHTML = `
-                            <div class="message-content">${message}</div>
-                            <span class="message-time">Just now</span>
-                        `;
-                        messagesContainer.appendChild(tempMsg);
-                        scrollToBottom();
+                }).then(response => {
+                    // Instead of redirecting on success, dynamically add the message
+                    if (response.ok) {
+                        messageInput.value = '';
+                        const messagesContainer = document.getElementById('messages-container');
+                        if (messagesContainer) {
+                            const tempMsg = document.createElement('div');
+                            tempMsg.className = 'message message-outgoing';
+                            tempMsg.innerHTML = `
+                                <div class="message-content">${message}</div>
+                                <span class="message-time">Just now</span>
+                            `;
+                            messagesContainer.appendChild(tempMsg);
+                            scrollToBottom();
+                        }
+                    } else {
+                        alert('Failed to send message.');
+                        console.error('Message send failed with status:', response.status);
                     }
+                }).catch(error => {
+                    console.error('Error sending message:', error);
+                    alert('An error occurred while sending your message.');
                 });
             }
         });
-        
-        // Poll for new messages every 5 seconds
+
+        // Poll for new messages every 5 seconds (consider WebSockets for real-time)
         setInterval(() => {
             if (<?php echo $conversation_id ? 'true' : 'false'; ?>) {
                 fetch(`chat.php?conversation_id=<?php echo $conversation_id; ?>&ajax=1`)
@@ -454,28 +471,34 @@ $unread_count = $chat->getUnreadCount($_SESSION['user_id']);
                     .then(html => {
                         const parser = new DOMParser();
                         const doc = parser.parseFromString(html, 'text/html');
-                        const newMessages = doc.querySelectorAll('.message-incoming');
+                        // Select only incoming messages that are not already present
+                        const newIncomingMessages = doc.querySelectorAll('.message-incoming');
                         const messagesContainer = document.getElementById('messages-container');
-                        
-                        newMessages.forEach(msg => {
-                            if (!document.getElementById(`msg-${msg.dataset.id}`)) {
-                                messagesContainer.appendChild(msg.cloneNode(true));
+                        if (messagesContainer) {
+                            let addedNew = false;
+                            newIncomingMessages.forEach(newMsg => {
+                                const msgId = newMsg.dataset.id;
+                                if (!document.querySelector(`#messages-container .message[data-id="${msgId}"]`)) {
+                                    messagesContainer.appendChild(newMsg.cloneNode(true));
+                                    addedNew = true;
+                                }
+                            });
+                            if (addedNew) {
+                                scrollToBottom();
                             }
-                        });
-                        
-                        scrollToBottom();
-                    });
+                        }
+                    }).catch(error => console.error('Error polling for messages:', error));
             }
-        }, 5000);
-        
+        }, 5000); // Poll every 5 seconds
+
         // Initial scroll to bottom
         scrollToBottom();
-        
+
         // Enter key handling (Shift+Enter for new line)
-        document.getElementById('message-input').addEventListener('keydown', function(e) {
+        document.getElementById('message-input')?.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                document.querySelector('.send-button').click();
+                document.querySelector('.send-button')?.click();
             }
         });
     </script>
