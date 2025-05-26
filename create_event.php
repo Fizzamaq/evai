@@ -197,7 +197,7 @@ $user_data = $user->getUserById($_SESSION['user_id']);
         <div class="ai-suggestion">
             <h3>🤖 Want AI Help?</h3>
             <p>Let our AI assistant help you plan your event through conversation!</p>
-            <a href="ai_chat.php" class="btn" style="background: rgba(255,255,255,0.2); margin-top: 10px;">Try AI Assistant</a>
+            <a href="ai_chat.php" class="create-event-btn" style="margin-left: 10px; background: linear-gradient(135deg, #fd79a8 0%, #fdcb6e 100%);">AI Assistant</a>
         </div>
         
         <div class="form-card">
