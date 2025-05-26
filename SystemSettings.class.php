@@ -19,10 +19,21 @@ class SystemSettings {
         }
     }
 
-    public function updateSetting($key, $value) {
+    // Modified updateSetting to include description and data_type for initial population
+    // It uses ON DUPLICATE KEY UPDATE assuming setting_key is UNIQUE or PRIMARY
+    public function updateSetting($key, $value, $description = null, $dataType = null) {
         try {
-            $stmt = $this->pdo->prepare("INSERT INTO system_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
-            return $stmt->execute([$key, $value]);
+            $sql = "INSERT INTO system_settings (setting_key, setting_value, description, data_type) 
+                    VALUES (?, ?, ?, ?)
+                    ON DUPLICATE KEY UPDATE 
+                        setting_value = VALUES(setting_value), 
+                        description = VALUES(description), 
+                        data_type = VALUES(data_type),
+                        updated_at = NOW()"; // Update timestamp on change
+            $params = [$key, $value, $description, $dataType];
+
+            $stmt = $this->pdo->prepare($sql);
+            return $stmt->execute($params);
         } catch (PDOException $e) {
             error_log("Update setting error: " . $e->getMessage());
             return false;
@@ -39,40 +50,21 @@ class SystemSettings {
         }
     }
 
-    // Example: Add a setting for AI API key (if not already in config.php)
+    // Method to ensure default settings are present, useful on first run
     public function ensureDefaultSettings() {
-        $settings = [
-            'site_name' => ['EventCraftAI', 'Website Name', 'string'],
-            'contact_email' => ['info@eventcraftai.com', 'Contact Email Address', 'string'],
-            'maintenance_mode' => ['0', 'Enable maintenance mode', 'boolean'],
-            'reviews_enabled' => ['1', 'Allow users to leave reviews', 'boolean'],
-            'stripe_publishable_key' => ['', 'Stripe Publishable Key (for frontend)', 'string'],
+        $defaultSettings = [
+            'site_name' => ['value' => 'EventCraftAI', 'description' => 'Website Name', 'data_type' => 'string'],
+            'contact_email' => ['value' => 'info@eventcraftai.com', 'description' => 'Contact Email Address', 'data_type' => 'string'],
+            'maintenance_mode' => ['value' => '0', 'description' => 'Enable maintenance mode', 'data_type' => 'boolean'],
+            'reviews_enabled' => ['value' => '1', 'description' => 'Allow users to leave reviews', 'data_type' => 'boolean'],
+            'stripe_publishable_key' => ['value' => '', 'description' => 'Stripe Publishable Key (for frontend)', 'data_type' => 'string'],
+            'openai_api_key' => ['value' => '', 'description' => 'OpenAI API Key (for AI Assistant)', 'data_type' => 'string'],
             // Add more settings as needed
         ];
 
-        foreach ($settings as $key => $details) {
-            $this->updateSetting($key, $details[0], $details[1], $details[2]); // Assuming updateSetting can take description and type
-        }
-    }
-
-    // Modified updateSetting to include description and data_type for initial population
-    public function updateSetting($key, $value, $description = null, $dataType = null) {
-        try {
-            $sql = "INSERT INTO system_settings (setting_key, setting_value, description, data_type) VALUES (?, ?, ?, ?)
-                    ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)";
-            $params = [$key, $value, $description, $dataType];
-            if ($description && $dataType) {
-                $sql = "INSERT INTO system_settings (setting_key, setting_value, description, data_type) VALUES (?, ?, ?, ?)
-                        ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), description = VALUES(description), data_type = VALUES(data_type)";
-                $params = [$key, $value, $description, $dataType];
-            }
-
-            $stmt = $this->pdo->prepare($sql);
-            return $stmt->execute($params);
-        } catch (PDOException $e) {
-            error_log("Update setting error: " . $e->getMessage());
-            return false;
+        foreach ($defaultSettings as $key => $details) {
+            // Check if setting exists to avoid re-inserting, but update will handle if it's already there
+            $this->updateSetting($key, $details['value'], $details['description'], $details['data_type']);
         }
     }
 }
-?>
