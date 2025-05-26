@@ -1,0 +1,179 @@
+/* Landing Page Specific Styles */
+.hero {
+    background: linear-gradient(135deg, #3498db, #2c3e50);
+    color: white;
+    padding: 80px 0 120px;
+    text-align: center;
+}
+
+.main-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 60px;
+}
+
+.logo {
+    font-size: 24px;
+    font-weight: bold;
+}
+
+.nav-links {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+}
+
+.nav-links a {
+    color: white;
+    text-decoration: none;
+}
+
+.hero-content h1 {
+    font-size: 48px;
+    margin-bottom: 20px;
+}
+
+.subtitle {
+    font-size: 20px;
+    max-width: 700px;
+    margin: 0 auto 40px;
+    opacity: 0.9;
+}
+
+.cta-buttons {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+}
+
+.btn {
+    padding: 12px 24px;
+    border-radius: 4px;
+    text-decoration: none;
+    display: inline-block;
+    font-weight: 500;
+}
+
+.btn.primary {
+    background: white;
+    color: #2c3e50;
+}
+
+.btn.outline {
+    border: 2px solid white;
+    color: white;
+}
+
+.btn.secondary {
+    background: rgba(255,255,255,0.1);
+    color: white;
+    border: 2px solid rgba(255,255,255,0.3);
+}
+
+.btn.large {
+    padding: 16px 32px;
+    font-size: 18px;
+}
+
+.section {
+    padding: 80px 0;
+}
+
+.section h2 {
+    text-align: center;
+    margin-bottom: 50px;
+    font-size: 36px;
+    color: #2c3e50;
+}
+
+.features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 30px;
+}
+
+.feature-card {
+    background: white;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+    text-align: center;
+}
+
+.feature-icon {
+    font-size: 48px;
+    margin-bottom: 20px;
+}
+
+.feature-card h3 {
+    margin-top: 0;
+    color: #2c3e50;
+}
+
+.steps {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    flex-wrap: wrap;
+}
+
+.step {
+    flex: 1;
+    min-width: 250px;
+    max-width: 300px;
+    text-align: center;
+}
+
+.step-number {
+    width: 60px;
+    height: 60px;
+    background: #3498db;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    font-weight: bold;
+    margin: 0 auto 20px;
+}
+
+.main-footer {
+    background: #2c3e50;
+    color: white;
+    padding: 60px 0 20px;
+}
+
+.footer-content {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 40px;
+    margin-bottom: 40px;
+}
+
+.footer-section h4 {
+    margin-top: 0;
+    font-size: 18px;
+}
+
+.footer-section ul {
+    list-style: none;
+    padding: 0;
+}
+
+.footer-section ul li {
+    margin-bottom: 10px;
+}
+
+.footer-section a {
+    color: #ecf0f1;
+}
+
+.copyright {
+    text-align: center;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    color: rgba(255,255,255,0.7);
+    font-size: 14px;
+}
