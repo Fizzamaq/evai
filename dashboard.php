@@ -1,29 +1,40 @@
 <?php
-session_start();
-require_once '../../includes/config.php';
-require_once '../../classes/Vendor.class.php';
-require_once '../../classes/User.class.php'; // Include User class
+session_start(); //
+require_once '../includes/config.php'; //
+require_once '../classes/User.class.php'; //
+require_once '../classes/Event.class.php'; // Include Event class for customer events
+require_once '../classes/Booking.class.php'; // Include Booking class for customer bookings
 
-$vendor = new Vendor($pdo); // Pass PDO
-$user = new User($pdo); // Pass PDO
-
-// Verify vendor access (this also sets $_SESSION['vendor_id'])
-$vendor->verifyVendorAccess();
-
-$vendor_data = $vendor->getVendorByUserId($_SESSION['user_id']); // Re-fetch to ensure all data is current
-if (!$vendor_data) {
-    // This case should ideally be caught by verifyVendorAccess, but as a fallback:
+// Check if user is logged in
+if (!isset($_SESSION['user_id'])) {
     header('Location: ' . BASE_URL . 'public/login.php');
     exit();
 }
 
-// Get vendor statistics
-$stats = [
-    'total_bookings' => $vendor->getBookingCount($vendor_data['id']),
-    'upcoming_events' => $vendor->getUpcomingEvents($vendor_data['id']),
-    'average_rating' => $vendor_data['rating'] ?? 0, // Handle null rating
-    'response_rate' => $vendor->getResponseRate($vendor_data['id'])
-];
+$user = new User($pdo); //
+$event = new Event($pdo); // Instantiate Event class
+$booking = new Booking($pdo); // Instantiate Booking class
+
+$user_data = $user->getUserById($_SESSION['user_id']); //
+
+// Redirect based on user type if they land here incorrectly (e.g., direct access)
+if (isset($_SESSION['user_type'])) {
+    switch ($_SESSION['user_type']) {
+        case 2: // Vendor
+            header('Location: ' . BASE_URL . 'public/vendor_dashboard.php');
+            exit();
+        case 3: // Admin
+            header('Location: ' . BASE_URL . 'admin/dashboard.php');
+            exit();
+        // user_type 1 (Customer) will continue here
+    }
+}
+
+// Get customer-specific dashboard data
+$event_stats = $event->getUserEventStats($_SESSION['user_id']);
+$upcoming_events = $event->getUpcomingEvents($_SESSION['user_id'], 5); // Limit to 5 upcoming
+$recent_bookings = $booking->getUserBookings($_SESSION['user_id'], 5); // Assuming a method to get recent bookings
+
 ?>
 
 <!DOCTYPE html>
@@ -31,209 +42,171 @@ $stats = [
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vendor Dashboard - EventCraftAI</title>
-    <link rel="stylesheet" href="../../assets/css/style.css">
-    <link rel="stylesheet" href="../../assets/css/dashboard.css"> <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js'></script> <style>
-        .vendor-dashboard {
+    <title>Dashboard - EventCraftAI</title>
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <link rel="stylesheet" href="../assets/css/dashboard.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        /* Add specific styles for customer dashboard if needed */
+        .customer-dashboard-container {
             max-width: 1200px;
             margin: 0 auto;
             padding: 20px;
         }
-
-        .vendor-stats {
+        .dashboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e1e5e9;
+        }
+        .customer-stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 20px;
             margin-bottom: 30px;
         }
-
         .stat-card {
             background: white;
             padding: 20px;
             border-radius: 12px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            text-align: center;
         }
-
         .metric-value {
             font-size: 2em;
             font-weight: 700;
             color: #2d3436;
         }
-
         .metric-label {
             color: #636e72;
             font-size: 0.9em;
+            margin-top: 5px;
         }
-
         .dashboard-sections {
             display: grid;
-            grid-template-columns: 2fr 1fr;
+            grid-template-columns: 1fr 1fr; /* Two columns for content */
             gap: 30px;
         }
-
-        .upcoming-bookings {
+        .section-card {
             background: white;
             padding: 20px;
             border-radius: 12px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
-
-        .booking-item {
-            padding: 15px;
+        .section-card h2 {
+            margin-top: 0;
+            color: #2d3436;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+        .list-item {
+            padding: 10px 0;
             border-bottom: 1px solid #eee;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
-
-        .calendar-widget {
-            background: white;
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        .list-item:last-child {
+            border-bottom: none;
         }
-
-        /* FullCalendar Custom Styles from vendor.css */
-        #calendar {
-            max-width: 1000px;
-            margin: 20px auto;
-            padding: 20px;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        .list-item-title {
+            font-weight: 600;
+            color: #2d3436;
         }
-
-        .fc-event {
-            cursor: pointer;
-            padding: 3px;
-            border-radius: 4px;
+        .list-item-meta {
             font-size: 0.9em;
+            color: #636e72;
         }
-
-        .fc-event-available {
-            background: #c8e6c9;
-            border-color: #a5d6a7;
-            color: #1b5e20; /* Added text color for better contrast */
+        .empty-state {
+            text-align: center;
+            padding: 20px;
+            color: #636e72;
         }
-
-        .fc-event-booked {
-            background: #ffcdd2;
-            border-color: #ef9a9a;
-            color: #b71c1c; /* Added text color for better contrast */
+        .btn-link {
+            text-decoration: none;
+            color: #667eea;
+            font-weight: 600;
+            transition: color 0.2s;
         }
-
-        .fc-event-blocked {
-            background: #e0e0e0;
-            border-color: #bdbdbd;
-            color: #424242; /* Added text color for better contrast */
+        .btn-link:hover {
+            color: #764ba2;
         }
     </style>
 </head>
 <body>
-    <?php include '../includes/vendor_header.php'; ?>
+    <?php include 'header.php'; ?>
 
-    <div class="vendor-dashboard">
-        <div class="vendor-header">
-            <h1>Welcome, <?= htmlspecialchars($vendor_data['business_name']) ?></h1>
-            <div class="rating">
-                ★ <?= number_format($stats['average_rating'], 1) ?> (<?= $vendor_data['total_reviews'] ?? 0 ?> reviews)
+    <div class="customer-dashboard-container">
+        <div class="dashboard-header">
+            <div>
+                <h1>Welcome, <?= htmlspecialchars($user_data['first_name']) ?>!</h1>
+                <p>Your event planning journey starts here.</p>
+            </div>
+            <div>
+                <a href="create_event.php" class="btn btn-primary">Create New Event</a>
+                <a href="ai_chat.php" class="btn btn-secondary">AI Assistant</a>
             </div>
         </div>
 
-        <div class="vendor-stats">
+        <div class="customer-stats-grid">
             <div class="stat-card">
-                <div class="metric-value"><?= $stats['total_bookings'] ?></div>
-                <div class="metric-label">Total Bookings</div>
+                <div class="metric-value"><?= $event_stats['total_events'] ?? 0 ?></div>
+                <div class="metric-label">Total Events</div>
             </div>
             <div class="stat-card">
-                <div class="metric-value"><?= $stats['upcoming_events'] ?></div>
+                <div class="metric-value"><?= $event_stats['upcoming_events'] ?? 0 ?></div>
                 <div class="metric-label">Upcoming Events</div>
             </div>
             <div class="stat-card">
-                <div class="metric-value"><?= number_format($stats['response_rate'] * 100, 0) ?>%</div>
-                <div class="metric-label">Response Rate</div>
+                <div class="metric-value"><?= $event_stats['planning_events'] ?? 0 ?></div>
+                <div class="metric-label">Events in Planning</div>
+            </div>
+            <div class="stat-card">
+                <div class="metric-value">$<?= number_format($event_stats['avg_budget'] ?? 0, 2) ?></div>
+                <div class="metric-label">Avg. Event Budget</div>
             </div>
         </div>
 
         <div class="dashboard-sections">
-            <div class="upcoming-bookings">
-                <h2>Upcoming Bookings</h2>
-                <?php $upcomingBookings = $vendor->getUpcomingBookings($vendor_data['id']); ?>
-                <?php if (empty($upcomingBookings)): ?>
-                    <p>No upcoming bookings.</p>
-                <?php else: ?>
-                    <?php foreach ($upcomingBookings as $booking): ?>
-                        <div class="booking-item">
+            <div class="section-card">
+                <h2>Upcoming Events</h2>
+                <?php if (!empty($upcoming_events)): ?>
+                    <?php foreach ($upcoming_events as $event_item): ?>
+                        <div class="list-item">
                             <div>
-                                <h3><?= htmlspecialchars($booking['event_title']) ?></h3>
-                                <div class="booking-date">
-                                    <?= date('M j, Y', strtotime($booking['service_date'])) ?>
-                                </div>
+                                <div class="list-item-title"><?= htmlspecialchars($event_item['title']) ?></div>
+                                <div class="list-item-meta"><?= date('M j, Y', strtotime($event_item['event_date'])) ?> | <?= htmlspecialchars($event_item['type_name']) ?></div>
                             </div>
-                            <a href="<?= BASE_URL ?>public/booking.php?id=<?= $booking['id'] ?>" class="btn">View Details</a>
+                            <a href="<?= BASE_URL ?>public/event.php?id=<?= $event_item['id'] ?>" class="btn-link">View</a>
                         </div>
                     <?php endforeach; ?>
+                <?php else: ?>
+                    <div class="empty-state">No upcoming events. <a href="create_event.php" class="btn-link">Create one now!</a></div>
                 <?php endif; ?>
             </div>
 
-            <div class="calendar-widget">
-                <h2>Availability Calendar</h2>
-                <div id="availability-calendar"></div>
+            <div class="section-card">
+                <h2>Recent Bookings</h2>
+                <?php if (!empty($recent_bookings)): ?>
+                    <?php foreach ($recent_bookings as $booking_item): ?>
+                        <div class="list-item">
+                            <div>
+                                <div class="list-item-title">Booking for <?= htmlspecialchars($booking_item['event_title']) ?></div>
+                                <div class="list-item-meta"><?= htmlspecialchars($booking_item['business_name']) ?> | Status: <?= ucfirst(htmlspecialchars($booking_item['status'])) ?></div>
+                            </div>
+                            <a href="<?= BASE_URL ?>public/booking.php?id=<?= $booking_item['id'] ?>" class="btn-link">View</a>
+                        </div>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <div class="empty-state">No recent bookings. <a href="events.php" class="btn-link">Find vendors for your events!</a></div>
+                <?php endif; ?>
             </div>
         </div>
     </div>
 
-    <script>
-        // Initialize calendar
-        document.addEventListener('DOMContentLoaded', function() {
-            const calendarEl = document.getElementById('availability-calendar');
-            if (calendarEl) {
-                const calendar = new FullCalendar.Calendar(calendarEl, {
-                    initialView: 'dayGridMonth',
-                    // events: '/api/vendor/availability?vendor_id=<?= $vendor_data['id'] ?>', // API endpoint for events
-                    events: function(fetchInfo, successCallback, failureCallback) {
-                        fetch(`<?= BASE_URL ?>public/availability.php?vendor_id=<?= <span class="math-inline">vendor\_data\['id'\] ?\>&start\=</span>{fetchInfo.startStr}&end=${fetchInfo.endStr}`)
-                            .then(response => response.json())
-                            .then(data => {
-                                const formattedEvents = data.map(event => ({
-                                    id: event.id,
-                                    title: event.status.charAt(0).toUpperCase() + event.status.slice(1), // Capitalize first letter
-                                    start: event.date + 'T' + event.start_time, // Combine date and time
-                                    end: event.date + 'T' + event.end_time, // Combine date and time
-                                    allDay: false, // Assuming time is always provided
-                                    extendedProps: { // Custom properties
-                                        status: event.status
-                                    }
-                                }));
-                                successCallback(formattedEvents);
-                            })
-                            .catch(error => {
-                                console.error('Error fetching availability:', error);
-                                failureCallback(error);
-                            });
-                    },
-                    eventContent: function(arg) {
-                        // Customize event display
-                        let statusClass = '';
-                        if (arg.event.extendedProps.status === 'available') {
-                            statusClass = 'fc-event-available';
-                        } else if (arg.event.extendedProps.status === 'booked') {
-                            statusClass = 'fc-event-booked';
-                        } else if (arg.event.extendedProps.status === 'blocked') {
-                            statusClass = 'fc-event-blocked';
-                        }
-                        return { html: `<div class="<span class="math-inline">\{statusClass\}"\></span>{arg.event.title}</div>` };
-                    },
-                    eventClick: function(info) {
-                        // Handle date click for availability management
-                        // Example: alert('Event: ' + info.event.title + ' on ' + info.event.startStr);
-                        // You might want to redirect to a detailed availability management page
-                        // or open a modal here.
-                    }
-                });
-                calendar.render();
-            }
-        });
-    </script>
+    <?php include 'footer.php'; ?>
 </body>
 </html>
