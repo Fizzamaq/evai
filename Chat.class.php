@@ -2,12 +2,10 @@
 // classes/Chat.class.php
 class Chat {
     private $conn;
-    
-    public function __construct() {
-        global $conn;
-        $this->conn = $conn;
-    }
 
+    public function __construct($pdo) { // Changed to accept PDO
+        $this->conn = $pdo;
+    }
     // Start a new conversation
     public function startConversation($event_id, $user_id, $vendor_id) {
         try {
