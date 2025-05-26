@@ -3,9 +3,8 @@
 class Vendor {
     private $conn;
     
-    public function __construct() {
-        global $conn;
-        $this->conn = $conn;
+    public function __construct($pdo) { // Changed to accept PDO
+        $this->conn = $pdo;
     }
 
     // Register a new vendor
@@ -177,44 +176,46 @@ class Vendor {
         }
     }
 
-    // Set vendor availability
-    public function setAvailability($vendor_id, $date, $start_time, $end_time, $status = 'available') {
-        try {
-            $stmt = $this->conn->prepare("INSERT INTO vendor_availability 
-                (vendor_id, date, start_time, end_time, status)
-                VALUES (?, ?, ?, ?, ?)
-                ON DUPLICATE KEY UPDATE 
+    // Set vendor availability (Unified method)
+    public function updateAvailability($vendorId, $date, $start_time, $end_time, $status) {
+        $stmt = $this->conn->prepare("
+            INSERT INTO vendor_availability 
+            (vendor_id, date, start_time, end_time, status)
+            VALUES (?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE
                 start_time = VALUES(start_time),
                 end_time = VALUES(end_time),
-                status = VALUES(status)");
-            
-            return $stmt->execute([
-                $vendor_id,
-                $date,
-                $start_time,
-                $end_time,
-                $status
-            ]);
-        } catch (PDOException $e) {
-            error_log("Set availability error: " . $e->getMessage());
-            return false;
-        }
+                status = VALUES(status),
+                updated_at = NOW()
+        ");
+        
+        return $stmt->execute([
+            $vendorId,
+            $date, // Use 'date' column for the specific day
+            $start_time,
+            $end_time,
+            $status
+        ]);
     }
 
-    // Get vendor availability
-    public function getAvailability($vendor_id, $start_date, $end_date) {
-        try {
-            $stmt = $this->conn->prepare("
-                SELECT * FROM vendor_availability 
-                WHERE vendor_id = ? AND date BETWEEN ? AND ?
-                ORDER BY date, start_time
-            ");
-            $stmt->execute([$vendor_id, $start_date, $end_date]);
-            return $stmt->fetchAll(PDO::FETCH_ASSOC);
-        } catch (PDOException $e) {
-            error_log("Get availability error: " . $e->getMessage());
-            return false;
-        }
+    // Get vendor availability (Unified method)
+    public function getAvailability($vendorId, $startDate, $endDate) {
+        $stmt = $this->conn->prepare("
+            SELECT 
+                id,
+                date, // Select 'date' column
+                start_time,
+                end_time,
+                status
+            FROM vendor_availability
+            WHERE 
+                vendor_id = ? AND
+                date BETWEEN ? AND ? // Query by date
+            ORDER BY date, start_time
+        ");
+        
+        $stmt->execute([$vendorId, $startDate, $endDate]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     // Get recommended vendors for an event
@@ -237,49 +238,57 @@ class Vendor {
             return false;
         }
     }
- public function updateAvailability($vendorId, $start, $end, $status) {
-        $stmt = $this->pdo->prepare("
-            INSERT INTO vendor_availability 
-            (vendor_id, start_time, end_time, status)
-            VALUES (?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE
-                status = VALUES(status),
-                updated_at = NOW()
-        ");
-        
-        return $stmt->execute([
-            $vendorId,
-            $start,
-            $end,
-            $status
-        ]);
-    }
-
-    public function getAvailability($vendorId, $startDate, $endDate) {
-        $stmt = $this->pdo->prepare("
-            SELECT 
-                id,
-                start_time as start,
-                end_time as end,
-                status
-            FROM vendor_availability
-            WHERE 
-                vendor_id = ? AND
-                start_time >= ? AND
-                end_time <= ?
-            ORDER BY start_time
-        ");
-        
-        $stmt->execute([$vendorId, $startDate, $endDate]);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    }
-
+ 
     public function verifyVendorAccess() {
-        session_start();
+        // session_start(); // Should be handled in config.php
         if (!isset($_SESSION['user_id']) || !$this->isVendor($_SESSION['user_id'])) {
             header('Location: /login.php');
             exit();
         }
+        // Fetch vendor_id and store in session for convenience
+        $vendorData = $this->getVendorByUserId($_SESSION['user_id']);
+        if ($vendorData) {
+            $_SESSION['vendor_id'] = $vendorData['id'];
+        } else {
+             header('Location: /login.php'); // Or a page to complete vendor profile
+             exit();
+        }
+    }
+
+    // Missing method: isVendor (referenced in verifyVendorAccess)
+    public function isVendor($userId) {
+        $stmt = $this->conn->prepare("SELECT user_type_id FROM users WHERE id = ?");
+        $stmt->execute([$userId]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result && $result['user_type_id'] == 2; // Assuming 2 is vendor type
+    }
+
+    // Missing method: getBookingCount
+    public function getBookingCount($vendorId) {
+        $stmt = $this->conn->prepare("SELECT COUNT(*) FROM bookings WHERE vendor_id = ?");
+        $stmt->execute([$vendorId]);
+        return $stmt->fetchColumn();
+    }
+
+    // Missing method: getUpcomingEvents (assuming this refers to vendor's upcoming bookings)
+    public function getUpcomingEvents($vendorId) {
+        $stmt = $this->conn->prepare("SELECT COUNT(*) FROM bookings WHERE vendor_id = ? AND service_date >= CURDATE() AND status != 'cancelled'");
+        $stmt->execute([$vendorId]);
+        return $stmt->fetchColumn();
+    }
+
+    // Missing method: getResponseRate (placeholder logic)
+    public function getResponseRate($vendorId) {
+        // Complex logic needed, placeholder for now
+        // This would typically involve tracking messages sent to vendor vs. vendor's replies.
+        return 0.85; // Example
+    }
+
+    // Missing method: getUpcomingBookings
+    public function getUpcomingBookings($vendorId) {
+        $stmt = $this->conn->prepare("SELECT b.*, e.title as event_title FROM bookings b JOIN events e ON b.event_id = e.id WHERE b.vendor_id = ? AND b.service_date >= CURDATE() ORDER BY b.service_date ASC LIMIT 5");
+        $stmt->execute([$vendorId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 }
 ?>
