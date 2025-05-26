@@ -1,7 +1,8 @@
 <?php
-require_once __DIR__ . '/../includes/config.php';
-require_once __DIR__ . '/../classes/User.class.php'; // Required for isAdmin check
-require_once __DIR__ . '/../classes/SystemSettings.class.php'; // Required for SystemSettings class
+session_start();
+require_once '../../includes/config.php';
+require_once '../../classes/User.class.php';
+require_once '../../classes/SystemSettings.class.php'; // Include SystemSettings class
 
 $user = new User($pdo); // Pass PDO
 $settings = new SystemSettings($pdo); // Pass PDO
@@ -40,7 +41,7 @@ $system_settings = $settings->getAllSettings();
             margin: 0 auto;
             padding: 20px;
         }
-        
+
         .setting-item {
             margin-bottom: 25px;
             padding: 20px;
@@ -48,19 +49,19 @@ $system_settings = $settings->getAllSettings();
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        
+
         .setting-key {
             font-weight: 600;
             margin-bottom: 8px;
             color: #2d3436;
         }
-        
+
         .setting-description {
             color: #636e72;
             font-size: 0.9em;
             margin-bottom: 15px;
         }
-        
+
         .setting-input {
             width: 100%;
             padding: 10px;
@@ -80,10 +81,10 @@ $system_settings = $settings->getAllSettings();
 </head>
 <body>
     <?php include '../includes/admin_header.php'; ?>
-    
+
     <div class="settings-container">
         <h1>System Settings</h1>
-        
+
         <?php if (isset($_SESSION['success'])): ?>
             <div class="alert"><?= htmlspecialchars($_SESSION['success']); unset($_SESSION['success']); ?></div>
         <?php endif; ?>
@@ -93,24 +94,24 @@ $system_settings = $settings->getAllSettings();
                 <div class="setting-item">
                     <div class="setting-key"><?php echo htmlspecialchars($setting['setting_key']); ?></div>
                     <div class="setting-description"><?php echo htmlspecialchars($setting['description']); ?></div>
-                    
+
                     <?php if ($setting['data_type'] === 'boolean'): ?>
                         <label>
-                            <input type="checkbox" name="settings[<?php echo htmlspecialchars($setting['setting_key']); ?>]" 
+                            <input type="checkbox" name="settings[<?php echo htmlspecialchars($setting['setting_key']); ?>]"
                                 value="1" <?php echo $setting['setting_value'] ? 'checked' : ''; ?>>
                             Enable
                         </label>
                     <?php elseif ($setting['data_type'] === 'json'): ?>
-                        <textarea class="setting-input" name="settings[<?php echo htmlspecialchars($setting['setting_key']); ?>]" 
+                        <textarea class="setting-input" name="settings[<?php echo htmlspecialchars($setting['setting_key']); ?>]"
                             rows="4"><?php echo htmlspecialchars($setting['setting_value']); ?></textarea>
                     <?php else: ?>
-                        <input type="text" class="setting-input" 
-                            name="settings[<?php echo htmlspecialchars($setting['setting_key']); ?>]" 
+                        <input type="text" class="setting-input"
+                            name="settings[<?php echo htmlspecialchars($setting['setting_key']); ?>]"
                             value="<?php echo htmlspecialchars($setting['setting_value']); ?>">
                     <?php endif; ?>
                 </div>
             <?php endforeach; ?>
-            
+
             <button type="submit" class="btn btn-primary">Save All Changes</button>
         </form>
     </div>
