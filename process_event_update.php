@@ -1,6 +1,7 @@
 <?php
 require_once '../includes/config.php';
 require_once '../classes/Event.class.php'; // Include Event class
+require_once '../classes/User.class.php'; // For user validation
 
 if (!isset($_SESSION['user_id']) || $_SERVER['REQUEST_METHOD'] !== 'POST') {
     header("Location: " . BASE_URL . "public/login.php");
@@ -10,58 +11,49 @@ if (!isset($_SESSION['user_id']) || $_SERVER['REQUEST_METHOD'] !== 'POST') {
 $userId = $_SESSION['user_id'];
 $eventId = (int)$_POST['event_id'];
 
-$eventData = [
-    'event_id' => $eventId,
-    'title' => trim($_POST['title']),
-    'event_type_id' => (int)$_POST['event_type_id'],
-    'description' => trim($_POST['description']) ?? null,
-    'event_date' => $_POST['event_date'],
-    'end_date' => $_POST['end_date'] ?? null,
-    'services' => $_POST['services'] ?? []
-];
-
 try {
     $event = new Event($pdo); // Pass PDO
-    $userEvents = $event->getEventById($eventId, $userId); // Use getEventById
-    if (empty($userEvents)) {
-        throw new Exception("Event not found or access denied");
+    $userEvent = $event->getEventById($eventId, $userId); // Use getEventById to verify ownership
+
+    if (empty($userEvent)) {
+        throw new Exception("Event not found or access denied.");
     }
 
-    // Update event details using Event class method or direct PDO
-    // Using Event class method for consistency:
-    $event->updateEvent($eventId, [
-        'title' => $eventData['title'],
-        'description' => $eventData['description'],
-        'event_type' => $eventData['event_type_id'], // Assuming event_type accepts ID
-        'event_date' => $eventData['event_date'],
-        'event_time' => null, // This is not passed from the form, might need to be added
-        'duration' => null, // Not passed
-        'location' => null, // Not passed
-        'guest_count' => null, // Not passed
-        'budget' => null, // Not passed
-        'status' => 'planning', // Default status, form doesn't provide
-        'services_needed' => json_encode($eventData['services']), // Convert to JSON
-        'special_requirements' => null, // Not passed
-        'updated_at' => date('Y-m-d H:i:s')
-    ], $userId);
+    // Collect and validate data from form
+    $eventData = [
+        'title' => trim($_POST['title']),
+        'event_type' => (int)$_POST['event_type_id'], // Now using ID
+        'description' => trim($_POST['description'] ?? ''),
+        'event_date' => $_POST['event_date'],
+        'end_date' => $_POST['end_date'] ?? null,
+        'event_time' => $_POST['event_time'] ?? null,
+        'end_time' => $_POST['end_time'] ?? null,
+        'location_string_from_form' => trim($_POST['location_string'] ?? ''), // New raw string input
+        'venue_name' => trim($_POST['venue_name'] ?? ''),
+        'venue_address' => trim($_POST['venue_address'] ?? ''),
+        'venue_city' => trim($_POST['venue_city'] ?? ''),
+        'venue_state' => trim($_POST['venue_state'] ?? ''),
+        'venue_country' => trim($_POST['venue_country'] ?? ''),
+        'venue_postal_code' => trim($_POST['venue_postal_code'] ?? ''),
+        'guest_count' => !empty($_POST['guest_count']) ? (int)$_POST['guest_count'] : null,
+        'budget_min' => !empty($_POST['budget_min']) ? (float)$_POST['budget_min'] : null,
+        'budget_max' => !empty($_POST['budget_max']) ? (float)$_POST['budget_max'] : null,
+        'status' => $_POST['status'] ?? $userEvent['status'], // Retain existing status if not provided
+        'special_requirements' => trim($_POST['special_requirements'] ?? ''),
+        'services_needed_array' => $_POST['services'] ?? [] // Expects an array of service IDs
+    ];
 
-
-    // Update services (needs to be handled outside Event class if Event class doesn't manage service requirements directly)
-    dbQuery("DELETE FROM event_service_requirements WHERE event_id = ?", [$eventId]);
-
-    foreach ($eventData['services'] as $serviceId) {
-        dbQuery("INSERT INTO event_service_requirements
-                      (event_id, service_id, priority)
-                      VALUES (?, ?, 'medium')", [(int)$eventId, (int)$serviceId]);
+    // Perform the update
+    if ($event->updateEvent($eventId, $eventData, $userId)) {
+        $_SESSION['event_success'] = "Event updated successfully!";
+        header("Location: " . BASE_URL . "public/event.php?id=" . $eventId);
+        exit();
+    } else {
+        throw new Exception("Failed to update event. Database error or no changes made.");
     }
-
-    $_SESSION['event_success'] = "Event updated successfully";
-    header("Location: " . BASE_URL . "public/event.php?id=" . $eventId);
-    exit();
 
 } catch (Exception $e) {
     $_SESSION['event_error'] = $e->getMessage();
     header("Location: " . BASE_URL . "public/edit_event.php?id=" . $eventId);
     exit();
 }
-?>
