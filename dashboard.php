@@ -1,23 +1,31 @@
 <?php
-session_start(); //
-require_once '../includes/config.php'; //
-require_once '../classes/User.class.php'; //
-require_once '../classes/Event.class.php'; // Include Event class for customer events
-require_once '../classes/Booking.class.php'; // Include Booking class for customer bookings
+// Start session and include necessary files for database connection and classes
+session_start(); 
+// [cite: fizzamaq/evai/evai-270c475187253adadaf42cfe122a431191cf1f80/config.php]
+require_once '../includes/config.php'; 
+// [cite: fizzamaq/evai/evai-270c475187253adadaf42cfe122a431191cf1f80/User.class.php]
+require_once '../classes/User.class.php'; 
+// [cite: fizzamaq/evai/evai-270c475187253adadaf42cfe122a431191cf1f80/Event.class.php]
+require_once '../classes/Event.class.php'; 
+// [cite: fizzamaq/evai/evai-270c475187253adadaf42cfe122a431191cf1f80/Booking.class.php]
+require_once '../classes/Booking.class.php'; 
 
-// Check if user is logged in
+// Redirect to login page if user is not logged in
 if (!isset($_SESSION['user_id'])) {
     header('Location: ' . BASE_URL . 'public/login.php');
     exit();
 }
 
-$user = new User($pdo); //
-$event = new Event($pdo); // Instantiate Event class
-$booking = new Booking($pdo); // Instantiate Booking class
+// Instantiate necessary classes with the PDO connection
+$user = new User($pdo); 
+$event = new Event($pdo); 
+$booking = new Booking($pdo); 
 
-$user_data = $user->getUserById($_SESSION['user_id']); //
+// Fetch current user's data
+$user_data = $user->getUserById($_SESSION['user_id']); 
 
-// Redirect based on user type if they land here incorrectly (e.g., direct access)
+// Ensure that only customer type users remain on this dashboard.
+// Redirect vendors and admins to their respective dashboards if they somehow land here directly.
 if (isset($_SESSION['user_type'])) {
     switch ($_SESSION['user_type']) {
         case 2: // Vendor
@@ -26,14 +34,21 @@ if (isset($_SESSION['user_type'])) {
         case 3: // Admin
             header('Location: ' . BASE_URL . 'admin/dashboard.php');
             exit();
-        // user_type 1 (Customer) will continue here
+        // User type 1 (Customer) will fall through and continue
     }
 }
 
-// Get customer-specific dashboard data
+// Fetch customer-specific dashboard data
+// Get overall event statistics for the user
 $event_stats = $event->getUserEventStats($_SESSION['user_id']);
-$upcoming_events = $event->getUpcomingEvents($_SESSION['user_id'], 5); // Limit to 5 upcoming
-$recent_bookings = $booking->getUserBookings($_SESSION['user_id'], 5); // Assuming a method to get recent bookings
+// Get a limited number of upcoming events for display
+$upcoming_events = $event->getUpcomingEvents($_SESSION['user_id'], 5); 
+// Get a limited number of recent bookings for display (assuming getUserBookings exists and can be limited)
+// Note: The provided Booking.class.php does not have a limit parameter for getUserBookings.
+// For this to work, you might need to add a $limit parameter to the getUserBookings method in Booking.class.php.
+$recent_bookings = $booking->getUserBookings($_SESSION['user_id']); 
+// Manually limit if the method doesn't support it directly
+$recent_bookings = array_slice($recent_bookings, 0, 5);
 
 ?>
 
@@ -47,11 +62,13 @@ $recent_bookings = $booking->getUserBookings($_SESSION['user_id'], 5); // Assumi
     <link rel="stylesheet" href="../assets/css/dashboard.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
-        /* Add specific styles for customer dashboard if needed */
+        /* Specific styles for the customer dashboard layout and elements */
         .customer-dashboard-container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
+            width: 100%; /* Make it take full width initially */
+            max-width: 1200px; /* Max width for larger screens */
+            margin: 0 auto; /* Center the container */
+            padding: 20px; /* Padding on all sides */
+            box-sizing: border-box; /* Include padding in width calculation */
         }
         .dashboard-header {
             display: flex;
@@ -60,6 +77,10 @@ $recent_bookings = $booking->getUserBookings($_SESSION['user_id'], 5); // Assumi
             margin-bottom: 30px;
             padding-bottom: 20px;
             border-bottom: 2px solid #e1e5e9;
+            flex-wrap: wrap; /* Allow items to wrap on smaller screens */
+        }
+        .dashboard-header > div {
+            margin-bottom: 10px; /* Add some space when items wrap */
         }
         .customer-stats-grid {
             display: grid;
@@ -86,7 +107,7 @@ $recent_bookings = $booking->getUserBookings($_SESSION['user_id'], 5); // Assumi
         }
         .dashboard-sections {
             display: grid;
-            grid-template-columns: 1fr 1fr; /* Two columns for content */
+            grid-template-columns: 1fr 1fr; /* Two columns for content sections */
             gap: 30px;
         }
         .section-card {
@@ -108,17 +129,24 @@ $recent_bookings = $booking->getUserBookings($_SESSION['user_id'], 5); // Assumi
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-wrap: wrap; /* Allow list items to wrap */
         }
         .list-item:last-child {
-            border-bottom: none;
+            border-bottom: none; /* Remove border from the last item */
         }
         .list-item-title {
             font-weight: 600;
             color: #2d3436;
+            flex-basis: 100%; /* Take full width on wrap */
         }
         .list-item-meta {
             font-size: 0.9em;
             color: #636e72;
+            flex-basis: 100%; /* Take full width on wrap */
+            margin-top: 5px;
+        }
+        .list-item .btn-link {
+            margin-top: 10px; /* Space out button when wrapped */
         }
         .empty-state {
             text-align: center;
@@ -127,17 +155,43 @@ $recent_bookings = $booking->getUserBookings($_SESSION['user_id'], 5); // Assumi
         }
         .btn-link {
             text-decoration: none;
-            color: #667eea;
+            color: #667eea; /* A nice primary color for links */
             font-weight: 600;
             transition: color 0.2s;
         }
         .btn-link:hover {
-            color: #764ba2;
+            color: #764ba2; /* Darker shade on hover */
+        }
+
+        /* Responsive adjustments for smaller screens */
+        @media (max-width: 768px) {
+            .dashboard-sections {
+                grid-template-columns: 1fr; /* Stack sections vertically on small screens */
+            }
+            .dashboard-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .dashboard-header > div:last-child {
+                display: flex;
+                flex-direction: column;
+                width: 100%;
+            }
+            .dashboard-header .btn {
+                width: 100%;
+                margin-bottom: 10px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .customer-dashboard-container {
+                padding: 15px; /* Slightly less padding on very small screens */
+            }
         }
     </style>
 </head>
 <body>
-    <?php include 'header.php'; ?>
+    <?php include 'header.php'; // Include the main site header ?>
 
     <div class="customer-dashboard-container">
         <div class="dashboard-header">
@@ -207,6 +261,6 @@ $recent_bookings = $booking->getUserBookings($_SESSION['user_id'], 5); // Assumi
         </div>
     </div>
 
-    <?php include 'footer.php'; ?>
+    <?php include 'footer.php'; // Include the main site footer ?>
 </body>
 </html>
