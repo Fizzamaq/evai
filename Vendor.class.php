@@ -7,36 +7,45 @@ class Vendor {
         $this->conn = $pdo;
     }
 
-    // Register a new vendor
+    // Register a new vendor (or complete profile if user_id exists)
     public function registerVendor($user_id, $data) {
         try {
-            $stmt = $this->conn->prepare("INSERT INTO vendor_profiles 
-                (user_id, business_name, business_license, tax_id, website, 
-                 business_address, business_city, business_state, business_country, 
-                 business_postal_code, service_radius, min_budget, max_budget, 
-                 experience_years) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            
-            $stmt->execute([
-                $user_id,
-                $data['business_name'],
-                $data['business_license'] ?? null,
-                $data['tax_id'] ?? null,
-                $data['website'] ?? null,
-                $data['business_address'],
-                $data['business_city'],
-                $data['business_state'],
-                $data['business_country'],
-                $data['business_postal_code'],
-                $data['service_radius'] ?? 50,
-                $data['min_budget'] ?? null,
-                $data['max_budget'] ?? null,
-                $data['experience_years'] ?? null
-            ]);
-            
-            return $this->conn->lastInsertId();
+            // Check if a vendor profile already exists for this user_id
+            $existingVendor = $this->getVendorByUserId($user_id);
+
+            if ($existingVendor) {
+                // If profile exists, update it
+                return $this->updateVendor($existingVendor['id'], $data);
+            } else {
+                // If no profile exists, create a new one
+                $stmt = $this->conn->prepare("INSERT INTO vendor_profiles 
+                    (user_id, business_name, business_license, tax_id, website, 
+                     business_address, business_city, business_state, business_country, 
+                     business_postal_code, service_radius, min_budget, max_budget, 
+                     experience_years) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                
+                $stmt->execute([
+                    $user_id,
+                    $data['business_name'],
+                    $data['business_license'] ?? null,
+                    $data['tax_id'] ?? null,
+                    $data['website'] ?? null,
+                    $data['business_address'],
+                    $data['business_city'],
+                    $data['business_state'],
+                    $data['business_country'],
+                    $data['business_postal_code'],
+                    $data['service_radius'] ?? 50,
+                    $data['min_budget'] ?? null,
+                    $data['max_budget'] ?? null,
+                    $data['experience_years'] ?? null
+                ]);
+                
+                return $this->conn->lastInsertId();
+            }
         } catch (PDOException $e) {
-            error_log("Vendor registration error: " . $e->getMessage());
+            error_log("Vendor registration/update error: " . $e->getMessage());
             return false;
         }
     }
@@ -53,8 +62,8 @@ class Vendor {
         }
     }
 
-    // Update vendor profile
-    public function updateVendor($vendor_id, $data) {
+    // Update vendor profile (assuming vendor_id is the primary key of vendor_profiles)
+    public function updateVendor($vendor_profile_id, $data) {
         try {
             $query = "UPDATE vendor_profiles SET 
                 business_name = ?,
@@ -69,7 +78,8 @@ class Vendor {
                 service_radius = ?,
                 min_budget = ?,
                 max_budget = ?,
-                experience_years = ?
+                experience_years = ?,
+                updated_at = NOW()
                 WHERE id = ?";
             
             $stmt = $this->conn->prepare($query);
@@ -87,7 +97,7 @@ class Vendor {
                 $data['min_budget'] ?? null,
                 $data['max_budget'] ?? null,
                 $data['experience_years'] ?? null,
-                $vendor_id
+                $vendor_profile_id // Use vendor_profile_id here, not user_id
             ]);
         } catch (PDOException $e) {
             error_log("Update vendor error: " . $e->getMessage());
@@ -239,29 +249,44 @@ class Vendor {
         }
     }
  
+    /**
+     * Verifies if the current session user is a vendor and has a complete vendor profile.
+     * Redirects if conditions are not met.
+     */
     public function verifyVendorAccess() {
-        // Check if user is logged in at all
+        // Ensure BASE_URL is defined (from config.php)
+        if (!defined('BASE_URL')) {
+            error_log("BASE_URL not defined in config.php. Cannot perform vendor access verification.");
+            // Fallback to a generic error or login page if BASE_URL is not set
+            header('Location: /login.php'); // Absolute path fallback
+            exit();
+        }
+
+        // 1. Check if user is logged in at all
         if (!isset($_SESSION['user_id'])) {
-            header('Location: ' . BASE_URL . 'public/login.php'); // Corrected path
+            // Not logged in, redirect to login page
+            header('Location: ' . BASE_URL . 'public/login.php'); 
             exit();
         }
 
-        // Check if the logged-in user is actually a vendor (user_type_id = 2)
-        if (!$this->isVendor($_SESSION['user_id'])) {
-            // If not a vendor, redirect to the general dashboard or login
-            header('Location: ' . BASE_URL . 'public/dashboard.php'); // Redirect to general dashboard
+        // 2. Check if the logged-in user's type is 'vendor' (user_type_id = 2)
+        // This relies on $_SESSION['user_type'] being set correctly during login.
+        if (!isset($_SESSION['user_type']) || $_SESSION['user_type'] != 2) {
+            // User is logged in but not a vendor, redirect to their general dashboard
+            header('Location: ' . BASE_URL . 'public/dashboard.php'); 
             exit();
         }
 
-        // If it's a vendor, fetch their vendor profile data
+        // 3. If user is a vendor type, check if they have a completed vendor profile
         $vendorData = $this->getVendorByUserId($_SESSION['user_id']);
         if ($vendorData) {
-            // Store vendor_id in session for easy access
+            // Vendor profile found, set vendor_id in session for convenience
             $_SESSION['vendor_id'] = $vendorData['id'];
         } else {
-            // User is of type 'vendor' but no vendor_profile exists
-            $_SESSION['error_message'] = "Your vendor profile is incomplete. Please register your business details.";
-            header('Location: ' . BASE_URL . 'public/login.php'); // Redirect to login or a vendor registration completion page
+            // User is of type 'vendor' but no vendor_profiles entry exists.
+            // Redirect them to a page where they can complete their vendor profile.
+            $_SESSION['error_message'] = "Your vendor profile is incomplete. Please register your business details to access vendor features.";
+            header('Location: ' . BASE_URL . 'public/edit_profile.php'); // Redirect to edit_profile or a dedicated vendor onboarding page
             exit();
         }
     }
@@ -292,7 +317,6 @@ class Vendor {
     public function getResponseRate($vendorId) {
         // This would involve more complex logic tracking messages sent to vendor vs. vendor replies.
         // For now, return a static value or implement a basic calculation.
-        // Example: (number of replies / number of inquiries) * 100
         return 0.85; // Example static value
     }
 
