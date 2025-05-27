@@ -3,7 +3,7 @@
 class Vendor {
     private $conn;
     
-    public function __construct($pdo) { // Changed to accept PDO
+    public function __construct($pdo) {
         $this->conn = $pdo;
     }
 
@@ -240,22 +240,33 @@ class Vendor {
     }
  
     public function verifyVendorAccess() {
-        // session_start(); // Should be handled in config.php
-        if (!isset($_SESSION['user_id']) || !$this->isVendor($_SESSION['user_id'])) {
-            header('Location: /login.php');
+        // Check if user is logged in at all
+        if (!isset($_SESSION['user_id'])) {
+            header('Location: ' . BASE_URL . 'public/login.php'); // Corrected path
             exit();
         }
-        // Fetch vendor_id and store in session for convenience
+
+        // Check if the logged-in user is actually a vendor (user_type_id = 2)
+        if (!$this->isVendor($_SESSION['user_id'])) {
+            // If not a vendor, redirect to the general dashboard or login
+            header('Location: ' . BASE_URL . 'public/dashboard.php'); // Redirect to general dashboard
+            exit();
+        }
+
+        // If it's a vendor, fetch their vendor profile data
         $vendorData = $this->getVendorByUserId($_SESSION['user_id']);
         if ($vendorData) {
+            // Store vendor_id in session for easy access
             $_SESSION['vendor_id'] = $vendorData['id'];
         } else {
-             header('Location: /login.php'); // Or a page to complete vendor profile
-             exit();
+            // User is of type 'vendor' but no vendor_profile exists
+            $_SESSION['error_message'] = "Your vendor profile is incomplete. Please register your business details.";
+            header('Location: ' . BASE_URL . 'public/login.php'); // Redirect to login or a vendor registration completion page
+            exit();
         }
     }
 
-    // Missing method: isVendor (referenced in verifyVendorAccess)
+    // Checks if a user is of type 'vendor'
     public function isVendor($userId) {
         $stmt = $this->conn->prepare("SELECT user_type_id FROM users WHERE id = ?");
         $stmt->execute([$userId]);
@@ -263,32 +274,32 @@ class Vendor {
         return $result && $result['user_type_id'] == 2; // Assuming 2 is vendor type
     }
 
-    // Missing method: getBookingCount
+    // Get total booking count for a vendor
     public function getBookingCount($vendorId) {
         $stmt = $this->conn->prepare("SELECT COUNT(*) FROM bookings WHERE vendor_id = ?");
         $stmt->execute([$vendorId]);
         return $stmt->fetchColumn();
     }
 
-    // Missing method: getUpcomingEvents (assuming this refers to vendor's upcoming bookings)
+    // Get count of upcoming bookings for a vendor
     public function getUpcomingEvents($vendorId) {
         $stmt = $this->conn->prepare("SELECT COUNT(*) FROM bookings WHERE vendor_id = ? AND service_date >= CURDATE() AND status != 'cancelled'");
         $stmt->execute([$vendorId]);
         return $stmt->fetchColumn();
     }
 
-    // Missing method: getResponseRate (placeholder logic)
+    // Placeholder for vendor response rate (requires chat message tracking)
     public function getResponseRate($vendorId) {
-        // Complex logic needed, placeholder for now
-        // This would typically involve tracking messages sent to vendor vs. vendor's replies.
-        return 0.85; // Example
+        // This would involve more complex logic tracking messages sent to vendor vs. vendor replies.
+        // For now, return a static value or implement a basic calculation.
+        // Example: (number of replies / number of inquiries) * 100
+        return 0.85; // Example static value
     }
 
-    // Missing method: getUpcomingBookings
+    // Get a list of upcoming bookings for a vendor
     public function getUpcomingBookings($vendorId) {
         $stmt = $this->conn->prepare("SELECT b.*, e.title as event_title FROM bookings b JOIN events e ON b.event_id = e.id WHERE b.vendor_id = ? AND b.service_date >= CURDATE() ORDER BY b.service_date ASC LIMIT 5");
         $stmt->execute([$vendorId]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 }
-?>
