@@ -25,10 +25,6 @@ class User {
             return $userId;
         } catch (PDOException $e) {
             $this->pdo->rollBack();
-            // Check for duplicate email error
-            if ($e->getCode() == 23000) { // SQLSTATE for integrity constraint violation
-                throw new Exception("Registration failed: Email already exists.");
-            }
             throw new Exception("Registration failed: " . $e->getMessage());
         }
     }
@@ -42,8 +38,6 @@ class User {
             $user = $stmt->fetch();
 
             if ($user && password_verify($password, $user['password_hash'])) {
-                // Regenerate session ID to prevent session fixation attacks
-                session_regenerate_id(true); 
                 $_SESSION['user_id'] = $user['id'];
                 $_SESSION['user_type'] = $user['user_type_id'];
                 $_SESSION['user_name'] = $user['first_name'];
@@ -61,7 +55,6 @@ class User {
     private function initUserProfile($userId) {
         try {
             // Insert IGNORE ensures it only inserts if user_id does not exist
-            // This is crucial to ensure every user has a corresponding profile entry.
             $stmt = $this->pdo->prepare("INSERT IGNORE INTO user_profiles (user_id) VALUES (?)");
             $stmt->execute([$userId]);
         } catch (PDOException $e) {
@@ -71,12 +64,11 @@ class User {
 
     public function getProfile($userId) {
         // Modified to select profile_image from user_profiles table
-        $stmt = $this->pdo->prepare("SELECT u.*, up.address, up.city, up.state, up.country, up.postal_code, up.profile_image 
-                                    FROM users u
+        $stmt = $this->pdo->prepare("SELECT u.*, up.* FROM users u
                                     LEFT JOIN user_profiles up ON u.id = up.user_id
                                     WHERE u.id = ?");
         $stmt->execute([$userId]);
-        return $stmt->fetch(PDO::FETCH_ASSOC); // Fetch as associative array
+        return $stmt->fetch();
     }
 
     public function updateProfile($userId, $data) {
@@ -89,39 +81,28 @@ class User {
                                         WHERE id = ?");
             $stmt->execute([$data['first_name'], $data['last_name'], $userId]);
 
-            // Update user_profiles table (for address, city, state, country, postal_code)
-            // Use INSERT ... ON DUPLICATE KEY UPDATE if user_profiles might not exist for some old users
-            // or ensure initUserProfile is always called on user creation/login.
-            $stmt = $this->pdo->prepare("INSERT INTO user_profiles (user_id, address, city, state, country, postal_code)
-                                        VALUES (?, ?, ?, ?, ?, ?)
-                                        ON DUPLICATE KEY UPDATE
-                                        address = VALUES(address), 
-                                        city = VALUES(city), 
-                                        state = VALUES(state),
-                                        country = VALUES(country),
-                                        postal_code = VALUES(postal_code),
-                                        updated_at = NOW()");
+            // Update user_profiles table (for address, city, state)
+            $stmt = $this->pdo->prepare("UPDATE user_profiles SET
+                                        address = ?, city = ?, state = ?
+                                        WHERE user_id = ?");
             $stmt->execute([
-                $userId,
                 $data['address'] ?? null,
                 $data['city'] ?? null,
                 $data['state'] ?? null,
-                $data['country'] ?? null, // Added country
-                $data['postal_code'] ?? null // Added postal_code
+                $userId
             ]);
 
             $this->pdo->commit();
             return true;
         } catch (PDOException $e) {
             $this->pdo->rollBack();
-            error_log("User profile update failed: " . $e->getMessage());
-            throw new Exception("User profile update failed: " . $e->getMessage());
+            throw new Exception("Profile update failed: " . $e->getMessage());
         }
     }
 
     // Missing method: getUserById (referenced in chat.php, dashboard.php, vendor_portfolio.php)
     public function getUserById($userId) {
-        $stmt = $this->pdo->prepare("SELECT u.*, up.address, up.city, up.state, up.country, up.postal_code, up.profile_image FROM users u LEFT JOIN user_profiles up ON u.id = up.user_id WHERE u.id = ?");
+        $stmt = $this->pdo->prepare("SELECT u.*, up.* FROM users u LEFT JOIN user_profiles up ON u.id = up.user_id WHERE u.id = ?");
         $stmt->execute([$userId]);
         return $stmt->fetch(PDO::FETCH_ASSOC);
     }
@@ -137,7 +118,7 @@ class User {
                 $token = bin2hex(random_bytes(32));
                 $expires = date('Y-m-d H:i:s', strtotime('+1 hour')); // Token expires in 1 hour
                 // Use INSERT ... ON DUPLICATE KEY UPDATE if you want to reuse existing reset tokens
-                $stmt = $this->pdo->prepare("INSERT INTO password_resets (user_id, token, expires_at) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE token = VALUES(token), expires_at = VALUES(expires_at)");
+                $stmt = $this->pdo->prepare("INSERT INTO password_resets (user_id, token, expires_at) VALUES (?, ?, ?)");
                 $stmt->execute([$user['id'], $token, $expires]);
 
                 // In a real application, you'd send an email here
@@ -196,8 +177,6 @@ class User {
     }
 
     // Missing method: isVendor (referenced in Vendor.class.php verifyVendorAccess)
-    // Note: This method is also in Vendor.class.php. It's better to have one canonical source.
-    // For now, keeping it here as it's used by other parts of the system potentially.
     public function isVendor($userId) {
         if ($userId === null) return false;
         $stmt = $this->pdo->prepare("SELECT user_type_id FROM users WHERE id = ?");
