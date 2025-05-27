@@ -1,118 +1,145 @@
+/* assets/css/events.css */
+
+/* Events Container (Specific overrides for this page) */
 .events-container {
     max-width: 1200px;
-    margin: 2rem auto;
-    padding: 0 1rem;
+    margin: var(--spacing-lg) auto;
+    padding: var(--spacing-md);
+    box-sizing: border-box;
 }
 
-.event-filters {
+.events-header {
     display: flex;
-    gap: 0.5rem;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-lg);
+    padding-bottom: var(--spacing-md);
+    border-bottom: 2px solid var(--border-color);
     flex-wrap: wrap;
-    margin: 1.5rem 0;
 }
 
-.filter-btn {
-    padding: 0.5rem 1rem;
-    border-radius: 4px;
-    background: #f0f0f0;
-    color: #333;
-    text-decoration: none;
-    transition: all 0.3s ease;
+.events-header h1 {
+    font-size: 2em;
+    margin-bottom: var(--spacing-xs);
 }
 
-.filter-btn.active {
-    background: var(--primary-color);
-    color: white;
+.events-header p {
+    color: var(--text-subtle);
+    font-size: 1.1em;
 }
 
-.filter-btn:hover {
-    background: #ddd;
+.events-header .create-event-btn {
+    margin-left: var(--spacing-sm); /* Space between buttons */
 }
 
-.new-event-btn {
-    margin-left: auto;
-    background: var(--accent-color);
-    color: white;
-}
-
-.events-list {
+.events-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 1.5rem;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: var(--spacing-md);
 }
 
 .event-card {
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
-    padding: 1.5rem;
-    transition: transform 0.3s ease;
+    background: var(--white);
+    border-radius: 12px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+    padding: var(--spacing-md);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .event-card:hover {
     transform: translateY(-5px);
-    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
 }
 
-.event-header {
+.event-title {
+    font-size: 1.4em;
+    font-weight: 600;
+    color: var(--text-dark);
+    margin-bottom: var(--spacing-sm);
+}
+
+.event-meta {
     display: flex;
-    justify-content: space-between;
-    margin-bottom: 1rem;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
+    color: var(--text-subtle);
+    font-size: 0.9em;
 }
 
-.event-status {
-    padding: 0.25rem 0.5rem;
-    border-radius: 4px;
-    font-size: 0.8rem;
-    text-transform: capitalize;
+.event-meta span {
+    display: flex;
+    align-items: center;
+    gap: 5px;
 }
 
-.event-status.planning {
-    background: #fff3cd;
-    color: #856404;
+.event-meta i {
+    color: var(--primary-color);
 }
 
-.event-status.confirmed {
-    background: #d4edda;
-    color: #155724;
-}
-
-.event-status.completed {
-    background: #d1ecf1;
-    color: #0c5460;
-}
-
-.event-status.cancelled {
-    background: #f8d7da;
-    color: #721c24;
+.event-description {
+    color: var(--text-subtle);
+    line-height: 1.5;
+    margin-bottom: var(--spacing-md);
 }
 
 .event-actions {
-    margin-top: 1.5rem;
     display: flex;
-    gap: 0.5rem;
+    gap: var(--spacing-xs);
+    flex-wrap: wrap;
 }
 
-.view-btn, .edit-btn {
-    padding: 0.5rem 1rem;
-    border-radius: 4px;
-    text-decoration: none;
-    font-size: 0.9rem;
+.event-actions .btn {
+    padding: 8px 16px;
+    font-size: 0.9em;
+    border-radius: 6px;
 }
 
-.view-btn {
-    background: var(--primary-color);
-    color: white;
+/* Status Badges */
+.status-badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.8em;
+    font-weight: 600;
+    text-transform: uppercase;
+    white-space: nowrap; /* Prevent badge text from wrapping */
 }
 
-.edit-btn {
-    background: #f0f0f0;
-    color: #333;
+.status-planning {
+    background: #ffeaa7; /* Light yellow */
+    color: #fdcb6e; /* Darker yellow */
 }
 
-.no-events {
-    text-align: center;
-    grid-column: 1 / -1;
-    padding: 2rem;
-    background: #f9f9f9;
-    border-radius: 8px;
+.status-active {
+    background: #55efc4; /* Light teal */
+    color: #00b894; /* Darker teal */
+}
+
+.status-completed {
+    background: #a29bfe; /* Light purple */
+    color: #6c5ce7; /* Darker purple */
+}
+
+.status-cancelled {
+    background: #ff7675; /* Light red */
+    color: #d63031; /* Darker red */
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .events-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .events-header .create-event-btn {
+        margin-left: 0;
+        margin-top: var(--spacing-sm);
+        width: 100%;
+    }
+    .events-grid {
+        grid-template-columns: 1fr; /* Stack event cards */
+    }
+    .event-actions .btn {
+        width: 100%;
+    }
 }
