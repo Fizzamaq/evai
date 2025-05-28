@@ -53,12 +53,15 @@ try {
         header("Location: " . $redirect_url);
         exit();
     } else {
-        $_SESSION['login_error'] = "Invalid email or password";
         header("Location: login.php");
         exit();
     }
 } catch (Exception $e) {
-    $_SESSION['login_error'] = "Login failed. Please try again.";
+    // If an exception reaches here, it means the User class didn't handle it.
+    // It's good to keep a generic fallback here, but ensure User.class.php
+    // sets more specific errors when possible.
+    $_SESSION['login_error'] = "An unexpected error occurred during login. " . $e->getMessage();
+    error_log("Login Exception in process_login.php: " . $e->getMessage());
     header("Location: login.php");
     exit();
 }
