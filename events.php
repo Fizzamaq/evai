@@ -10,8 +10,8 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-$user = new User();
-$event = new Event();
+$user = new User($pdo);
+$event = new Event($pdo);
 $user_data = $user->getUserById($_SESSION['user_id']);
 $user_events = $event->getUserEvents($_SESSION['user_id']);
 
