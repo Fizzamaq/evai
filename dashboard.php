@@ -1,6 +1,5 @@
 <?php
 // Start session and include necessary files for database connection and classes
-//session_start(); 
 // [cite: fizzamaq/evai/evai-270c475187253adadaf42cfe122a431191cf1f80/config.php]
 require_once '../includes/config.php'; 
 // [cite: fizzamaq/evai/evai-270c475187253adadaf42cfe122a431191cf1f80/User.class.php]
